@@ -997,13 +997,10 @@ tbody tr.active {
     font-size: 0.68rem;
   }
 
-  /* Move the legend up top so it can't collide with the bottom caption. */
+  /* The colour-scale legend takes up too much of a phone screen and blocks the
+     globe. Hide it on mobile — the on-globe Δ°C labels and the ranking table
+     already carry the scale. */
   .temp-legend {
-    right: 0.55rem;
-    top: 0.55rem;
-    bottom: auto;
-    max-width: 8.5rem;
-    font-size: 0.62rem;
-    padding: 0.4rem 0.5rem;
+    display: none;
   }
 }
