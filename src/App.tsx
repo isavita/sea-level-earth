@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ControlPanel } from './components/ControlPanel'
-import { EarthGlobe } from './components/EarthGlobe'
+import { EarthGlobe, type MapMode } from './components/EarthGlobe'
 import { IcePanel } from './components/IcePanel'
 import { StatsPanel } from './components/StatsPanel'
 import {
@@ -19,6 +19,7 @@ function AppShell() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>('ssp245')
   const [year, setYear] = useState(2100)
   const [selected, setSelected] = useState<CountryFeature | null>(null)
+  const [mapMode, setMapMode] = useState<MapMode>('temp')
 
   const scenario = SCENARIOS[scenarioId]
   const seaLevelM = useMemo(
@@ -39,8 +40,8 @@ function AppShell() {
           <span className="brand-sub">Sea level, ice & borders</span>
         </div>
         <p className="lede">
-          Six pathways from “no further change” to catastrophic ~8°C — with what
-          each would take, ice as bars, and country land & temperature.
+          Country colours show local average warming for the selected pathway and
+          year — plus land loss and temperature rankings in the side table.
         </p>
       </header>
 
@@ -62,13 +63,16 @@ function AppShell() {
         <div className="stage">
           <EarthGlobe
             seaLevelM={seaLevelM}
+            warmingC={warmingC}
+            mapMode={mapMode}
             selectedId={selected?.properties.id ?? null}
             onSelect={setSelected}
           />
           <div className="stage-caption">
             <span className="swatch" style={{ background: scenario.color }} />
             {scenario.shortLabel} · {year} · +{seaLevelM.toFixed(2)} m · +
-            {warmingC.toFixed(1)}°C
+            {warmingC.toFixed(1)}°C global · map{' '}
+            {mapMode === 'temp' ? 'temperature' : 'land loss'}
           </div>
         </div>
 
@@ -76,6 +80,8 @@ function AppShell() {
           <StatsPanel
             seaLevelM={seaLevelM}
             warmingC={warmingC}
+            mapMode={mapMode}
+            onMapMode={setMapMode}
             selected={selected}
             onSelectId={(id) => {
               if (!id) {

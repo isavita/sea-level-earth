@@ -3,16 +3,18 @@ import {
   computeLoss,
   formatArea,
   formatPct,
-  type LandLossResult,
 } from '../lib/landLoss'
-import { rankByLoss, type LossSortKey } from '../lib/countries'
 import { useCountries } from '../lib/CountriesContext'
 import type { CountryFeature } from '../lib/countries'
 import { estimateCountryTemp, formatDeltaC } from '../lib/warming'
+import { rankByImpact, type ImpactSortKey } from '../lib/impact'
+import type { MapMode } from './EarthGlobe'
 
 interface StatsPanelProps {
   seaLevelM: number
   warmingC: number
+  mapMode: MapMode
+  onMapMode: (mode: MapMode) => void
   selected: CountryFeature | null
   onSelectId: (id: string) => void
 }
@@ -20,34 +22,46 @@ interface StatsPanelProps {
 export function StatsPanel({
   seaLevelM,
   warmingC,
+  mapMode,
+  onMapMode,
   selected,
   onSelectId,
 }: StatsPanelProps) {
   const { features } = useCountries()
   const [query, setQuery] = useState('')
-  const [sortBy, setSortBy] = useState<LossSortKey>('area')
+  const [sortBy, setSortBy] = useState<ImpactSortKey>('temp')
 
   const ranking = useMemo(
-    () => rankByLoss(features, seaLevelM, 25, sortBy),
-    [features, seaLevelM, sortBy],
+    () => rankByImpact(features, seaLevelM, warmingC, 30, sortBy),
+    [features, seaLevelM, warmingC, sortBy],
   )
 
   const totals = useMemo(() => {
     let lost = 0
     let base = 0
     let affected = 0
+    let hottest = 0
     for (const f of features) {
-      if (!f.__risk || !f.__areaKm2) continue
+      if (!f.__areaKm2) continue
+      const temp = estimateCountryTemp(f, warmingC)
+      hottest = Math.max(hottest, temp.absoluteC)
+      if (!f.__risk) continue
       const row = computeLoss(f.__risk, seaLevelM, f.__areaKm2)
       if (!row) continue
       base += row.areaKm2
       lost += row.areaLostKm2
       if (row.areaLostKm2 > 1) affected += 1
     }
-    return { lost, base, affected, pct: base > 0 ? lost / base : 0 }
-  }, [features, seaLevelM])
+    return {
+      lost,
+      base,
+      affected,
+      pct: base > 0 ? lost / base : 0,
+      hottest,
+    }
+  }, [features, seaLevelM, warmingC])
 
-  const selectedLoss: LandLossResult | null = useMemo(() => {
+  const selectedLoss = useMemo(() => {
     if (!selected?.__risk) return null
     return computeLoss(selected.__risk, seaLevelM, selected.__areaKm2)
   }, [selected, seaLevelM])
@@ -60,21 +74,10 @@ export function StatsPanel({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return ranking
-    return features
-      .map((f) =>
-        f.__risk ? computeLoss(f.__risk, seaLevelM, f.__areaKm2) : null,
-      )
-      .filter((r): r is LandLossResult => {
-        if (!r) return false
-        return r.country.name.toLowerCase().includes(q)
-      })
-      .sort((a, b) =>
-        sortBy === 'pct'
-          ? b.fractionLost - a.fractionLost
-          : b.areaLostKm2 - a.areaLostKm2,
-      )
-      .slice(0, 25)
-  }, [query, ranking, features, seaLevelM, sortBy])
+    return rankByImpact(features, seaLevelM, warmingC, 500, sortBy).filter(
+      (r) => r.name.toLowerCase().includes(q),
+    ).slice(0, 30)
+  }, [query, ranking, features, seaLevelM, warmingC, sortBy])
 
   return (
     <section className="panel stats">
@@ -83,6 +86,33 @@ export function StatsPanel({
         <h2>Land & temperature</h2>
       </header>
 
+      <div className="map-mode-switch" role="tablist" aria-label="Map colour">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mapMode === 'temp'}
+          className={mapMode === 'temp' ? 'active' : undefined}
+          onClick={() => {
+            onMapMode('temp')
+            setSortBy('temp')
+          }}
+        >
+          Map: temperature
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mapMode === 'loss'}
+          className={mapMode === 'loss' ? 'active' : undefined}
+          onClick={() => {
+            onMapMode('loss')
+            setSortBy('area')
+          }}
+        >
+          Map: land loss
+        </button>
+      </div>
+
       <div className="totals">
         <div>
           <span className="totals-label">Est. land lost globally</span>
@@ -90,16 +120,16 @@ export function StatsPanel({
           <em>{formatPct(totals.pct)} of measured land</em>
         </div>
         <div>
-          <span className="totals-label">Countries affected</span>
-          <strong>{totals.affected}</strong>
-          <em>with &gt;1 km² exposed</em>
+          <span className="totals-label">Hottest local warming</span>
+          <strong>+{totals.hottest.toFixed(1)}°C</strong>
+          <em>vs pre-industrial</em>
         </div>
       </div>
 
-      {selected && selectedLoss && selectedTemp && (
+      {selected && selectedTemp && (
         <article className="country-card">
           <div className="country-card-top">
-            <h3>{selectedLoss.country.name}</h3>
+            <h3>{selected.properties.name}</h3>
             <button type="button" className="text-btn" onClick={() => onSelectId('')}>
               Clear
             </button>
@@ -107,13 +137,17 @@ export function StatsPanel({
           <dl className="country-metrics four">
             <div>
               <dt>Land left</dt>
-              <dd>{formatArea(selectedLoss.areaRemainingKm2)}</dd>
+              <dd>
+                {formatArea(
+                  selectedLoss?.areaRemainingKm2 ?? selected.__areaKm2 ?? 0,
+                )}
+              </dd>
             </div>
             <div>
               <dt>Land lost</dt>
               <dd className="danger">
-                {formatArea(selectedLoss.areaLostKm2)}
-                <span>{formatPct(selectedLoss.fractionLost)}</span>
+                {formatArea(selectedLoss?.areaLostKm2 ?? 0)}
+                <span>{formatPct(selectedLoss?.fractionLost ?? 0)}</span>
               </dd>
             </div>
             <div>
@@ -133,9 +167,9 @@ export function StatsPanel({
           </dl>
           <p className="hint">
             High-latitude countries warm faster than the global average (Arctic
-            amplification). This is a latitude-based sketch, not a full climate
-            model.
-            {selectedLoss.country.pctBelow5m > 0 &&
+            amplification). Sketch based on latitude — not a full climate model.
+            {selectedLoss &&
+              selectedLoss.country.pctBelow5m > 0 &&
               ` ${selectedLoss.country.pctBelow5m.toFixed(1)}% of land is ≤5 m (LECZ).`}
           </p>
         </article>
@@ -159,9 +193,7 @@ export function StatsPanel({
               <th>
                 <button
                   type="button"
-                  className={
-                    sortBy === 'area' ? 'sort-btn active' : 'sort-btn'
-                  }
+                  className={sortBy === 'area' ? 'sort-btn active' : 'sort-btn'}
                   onClick={() => setSortBy('area')}
                   aria-pressed={sortBy === 'area'}
                 >
@@ -175,23 +207,34 @@ export function StatsPanel({
                   onClick={() => setSortBy('pct')}
                   aria-pressed={sortBy === 'pct'}
                 >
-                  % land{sortBy === 'pct' ? ' ↓' : ''}
+                  %{sortBy === 'pct' ? ' ↓' : ''}
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  className={sortBy === 'temp' ? 'sort-btn active' : 'sort-btn'}
+                  onClick={() => setSortBy('temp')}
+                  aria-pressed={sortBy === 'temp'}
+                >
+                  Δ°C{sortBy === 'temp' ? ' ↓' : ''}
                 </button>
               </th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((row) => {
-              const active = selected?.properties.id === row.country.id
+              const active = selected?.properties.id === row.id
               return (
                 <tr
-                  key={row.country.id}
+                  key={row.id}
                   className={active ? 'active' : undefined}
-                  onClick={() => onSelectId(row.country.id)}
+                  onClick={() => onSelectId(row.id)}
                 >
-                  <td>{row.country.name}</td>
+                  <td>{row.name}</td>
                   <td>{formatArea(row.areaLostKm2)}</td>
                   <td>{formatPct(row.fractionLost)}</td>
+                  <td className="temp-cell">+{row.absoluteC.toFixed(1)}</td>
                 </tr>
               )
             })}
@@ -200,8 +243,8 @@ export function StatsPanel({
       </div>
 
       <p className="footnote">
-        Borders: Natural Earth. Coasts: LECZ ≤5 m. Ice & warming: IPCC
-        AR6–shaped illustrative curves. Not a local engineering flood map.
+        Δ°C is local mean warming vs pre-industrial (latitude amplification).
+        Sort by Lost, %, or temperature. Map colours follow the toggle above.
       </p>
     </section>
   )
