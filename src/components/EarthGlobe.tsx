@@ -103,7 +103,9 @@ export function EarthGlobe({
     controls.autoRotate = !prefersReducedMotion()
     controls.autoRotateSpeed = 0.28
     controls.enableDamping = true
-    g.pointOfView({ lat: 20, lng: 10, altitude: isMobile ? 2.5 : 2.15 }, 0)
+    // Closer on phones so the (smaller) globe fills the frame and per-country
+    // labels render large enough to read.
+    g.pointOfView({ lat: 20, lng: 10, altitude: isMobile ? 2.1 : 2.15 }, 0)
   }, [features.length, isMobile])
 
   // Cap the device pixel ratio — the single biggest GPU win on phones, where
@@ -188,15 +190,12 @@ export function EarthGlobe({
     return m
   }, [features, seaLevelM, warmingC])
 
-  // How many numeric labels to draw. Labels are 3D text (expensive), so we
-  // budget hard on mobile and drop them almost entirely while animating.
-  const labelBudget = playing
-    ? isMobile
-      ? 0
-      : 70
-    : isMobile
-      ? 26
-      : 150
+  // How many numeric labels to draw. Labels are 3D text whose geometry is
+  // rebuilt whenever their text changes — costly *per frame* while animating,
+  // but nearly free when the globe is paused (built once). So we drop them on
+  // mobile only while playing, and otherwise show the full set on every device
+  // (react-globe.gl hides the back-facing half, and you can pinch to zoom in).
+  const labelBudget = playing ? (isMobile ? 0 : 70) : 150
 
   const mapLabels = useMemo((): MapLabel[] => {
     const labels: MapLabel[] = []
@@ -308,10 +307,14 @@ export function EarthGlobe({
           labelsTransitionDuration={0}
           labelSize={(d: object) => {
             const label = d as MapLabel
-            if (label.id === selectedId) return 0.72
-            if (label.id === hoverId) return 0.62
+            if (label.id === selectedId) return isMobile ? 0.92 : 0.72
+            if (label.id === hoverId) return isMobile ? 0.82 : 0.62
             const a = Math.max(8_000, label.areaKm2)
-            return Math.min(0.55, Math.max(0.28, Math.sqrt(a) * 0.0003))
+            // Bigger floor on phones so small countries stay legible.
+            const base = Math.sqrt(a) * (isMobile ? 0.00045 : 0.0003)
+            return isMobile
+              ? Math.min(0.78, Math.max(0.46, base))
+              : Math.min(0.55, Math.max(0.28, base))
           }}
           labelColor={(d: object) => {
             const label = d as MapLabel
