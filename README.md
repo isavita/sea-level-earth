@@ -1,8 +1,11 @@
 # Meridian — Sea level, ice & borders
 
-Interactive Earth model for sea-level rise, polar ice loss, and country territory under IPCC-shaped pathways.
+Interactive 3D Earth for sea-level rise, polar ice loss, and country territory
+under IPCC-shaped pathways. Built to run smoothly on a phone: pick a warming
+pathway, press **Play**, and watch seas rise, ice retreat, and every country
+warm through 2300.
 
-## Run
+## Run (development)
 
 ```bash
 npm install
@@ -10,6 +13,33 @@ npm run dev
 ```
 
 Open http://127.0.0.1:5173/
+
+- **Play / pause** animates the year 2020 → 2300 for the selected pathway.
+- Drag the **year** slider to scrub to any point (this pauses playback).
+- Switch **pathways** at any time — the timeline keeps its year so you can
+  compare outcomes.
+- Toggle the map between **temperature** and **land loss**; tap a country (or a
+  row in the table) to focus it.
+
+## Performance notes
+
+The globe is the expensive part, so on phones the app:
+
+- lazy-loads Three.js in a separate chunk (initial JS is ~70 kB gzipped);
+- caps the device pixel ratio and disables antialiasing on small screens;
+- thins the on-globe labels while playing and re-shows them when paused;
+- commits the timeline ~14×/s (not every frame) and pauses rendering entirely
+  when the tab is hidden.
+
+## Build & deploy
+
+```bash
+npm run build   # → static bundle in dist/
+npm start       # serves dist/ on $PORT (default 3000)
+```
+
+`server.js` is a zero-dependency static server (gzip, long-lived caching for
+hashed assets, SPA fallback). See **Deploy on Railway** below.
 
 ## Pathways
 
@@ -27,6 +57,23 @@ Each pathway shows a **What it takes** list in the UI. Year range: **2020–2300
 ## Ice
 
 Polar ice is shown as **bars** (Arctic summer sea ice, Greenland, Antarctica). Arctic summer ice is near-linear with warming (no classical tip). Ice sheets can tip into multi-century–millennial committed loss.
+
+## Deploy on Railway
+
+The repo ships a multi-stage `Dockerfile` and `railway.json`, so Railway builds
+and runs it with no extra configuration.
+
+1. Push this repo to GitHub.
+2. In Railway: **New Project → Deploy from GitHub repo** (or `railway up` with
+   the CLI).
+3. Railway detects `railway.json`, builds the `Dockerfile`, and starts
+   `node server.js`. It injects `$PORT`, which the server binds automatically —
+   nothing to set.
+4. Open the generated domain (add a custom domain under the service's
+   **Settings → Networking** if you want one).
+
+The build stage compiles the static bundle; the run stage carries only `dist/`
+and `server.js` (no `node_modules`), so the runtime image stays small.
 
 ## Limits
 

@@ -90,6 +90,7 @@ input {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-areas: 'controls stage stats';
   gap: 1rem;
   min-height: 0;
 }
@@ -97,6 +98,14 @@ input {
 .sidebar {
   min-height: 0;
   display: flex;
+}
+
+.sidebar.left {
+  grid-area: controls;
+}
+
+.sidebar.right {
+  grid-area: stats;
 }
 
 .stack {
@@ -212,20 +221,70 @@ input {
 .year-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.year-row label {
+.year-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+}
+
+.year-readout label {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 
-.year-row strong {
+.year-readout strong {
   font-family: var(--font-display);
   font-size: 1.6rem;
   letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.play-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.6rem;
+  padding: 0 1rem 0 0.9rem;
+  border: 1px solid var(--teal);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 12%, white);
+  color: var(--teal);
+  font-weight: 650;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.05s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.play-btn:hover {
+  background: color-mix(in srgb, var(--teal) 20%, white);
+}
+
+.play-btn:active {
+  transform: scale(0.97);
+}
+
+.play-btn.playing {
+  background: var(--teal);
+  color: #fff;
+}
+
+.play-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.play-btn.playing .play-icon {
+  letter-spacing: 0;
 }
 
 input[type='range'] {
@@ -273,6 +332,7 @@ input[type='range'] {
 }
 
 .stage {
+  grid-area: stage;
   position: relative;
   background: var(--stage);
   border-radius: 2px;
@@ -860,17 +920,90 @@ tbody tr.active {
   color: var(--muted);
 }
 
+/* Tablet & below: one column, globe moves to the top. */
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(420px, 55vh) auto;
+    grid-template-areas:
+      'stage'
+      'controls'
+      'stats';
   }
 
   .sidebar {
     max-height: none;
   }
 
+  /* Let the page scroll as one — no nested scroll traps on touch. */
+  .stack,
+  .panel.stats {
+    overflow: visible;
+  }
+
   .stage {
-    min-height: 420px;
+    min-height: 50vh;
+  }
+}
+
+/* Phones: pin the globe so it stays on screen while the controls scroll under it. */
+@media (max-width: 760px) {
+  .app {
+    padding: 0.9rem 0.9rem 1.6rem;
+    gap: 0.75rem;
+  }
+
+  .lede {
+    font-size: 0.9rem;
+    max-width: none;
+  }
+
+  .layout {
+    gap: 0.75rem;
+  }
+
+  .stage {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    min-height: 0;
+    height: 46vh;
+    box-shadow: 0 12px 22px -14px rgba(7, 22, 28, 0.85);
+  }
+
+  /* Two-up scenario chips halve the tall stack. */
+  .scenario-switch.multi {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .scenario-switch.multi .scenario {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.12rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .scenario-switch.multi .scenario-warm {
+    text-align: left;
+  }
+
+  .table-wrap {
+    max-height: 60vh;
+  }
+
+  .stage-caption {
+    left: 0.55rem;
+    bottom: 0.55rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.68rem;
+  }
+
+  /* Move the legend up top so it can't collide with the bottom caption. */
+  .temp-legend {
+    right: 0.55rem;
+    top: 0.55rem;
+    bottom: auto;
+    max-width: 8.5rem;
+    font-size: 0.62rem;
+    padding: 0.4rem 0.5rem;
   }
 }

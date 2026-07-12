@@ -11,8 +11,10 @@ interface ControlPanelProps {
   year: number
   seaLevelM: number
   warmingC: number
+  playing: boolean
   onScenario: (id: ScenarioId) => void
   onYear: (year: number) => void
+  onTogglePlay: () => void
 }
 
 export function ControlPanel({
@@ -20,10 +22,13 @@ export function ControlPanel({
   year,
   seaLevelM,
   warmingC,
+  playing,
   onScenario,
   onYear,
+  onTogglePlay,
 }: ControlPanelProps) {
   const scenario = SCENARIOS[scenarioId]
+  const atEnd = year >= YEAR_MAX
 
   return (
     <section className="panel controls">
@@ -69,8 +74,26 @@ export function ControlPanel({
 
       <div className="year-block">
         <div className="year-row">
-          <label htmlFor="year-slider">Year</label>
-          <strong>{year}</strong>
+          <button
+            type="button"
+            className={`play-btn${playing ? ' playing' : ''}`}
+            onClick={onTogglePlay}
+            aria-label={
+              playing ? 'Pause timeline' : atEnd ? 'Replay timeline' : 'Play timeline'
+            }
+            aria-pressed={playing}
+          >
+            <span className="play-icon" aria-hidden>
+              {playing ? '❙❙' : atEnd ? '↺' : '▶'}
+            </span>
+            <span className="play-text">
+              {playing ? 'Pause' : atEnd ? 'Replay' : 'Play'}
+            </span>
+          </button>
+          <div className="year-readout">
+            <label htmlFor="year-slider">Year</label>
+            <strong>{year}</strong>
+          </div>
         </div>
         <input
           id="year-slider"

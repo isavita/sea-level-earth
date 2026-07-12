@@ -6,6 +6,7 @@ import { lossColor } from '../lib/countries'
 import { useCountries } from '../lib/CountriesContext'
 import type { CountryFeature } from '../lib/countries'
 import { estimateCountryTemp, tempColor, TEMP_LEGEND } from '../lib/warming'
+import { useIsMobile } from '../lib/useIsMobile'
 
 export type MapMode = 'temp' | 'loss'
 
@@ -13,6 +14,8 @@ interface EarthGlobeProps {
   seaLevelM: number
   warmingC: number
   mapMode: MapMode
+  /** True while the timeline is auto-playing — labels are thinned for speed. */
+  playing: boolean
   selectedId: string | null
   onSelect: (feature: CountryFeature | null) => void
 }
@@ -26,6 +29,12 @@ interface MapLabel {
   areaKm2: number
   /** Used for contrast: higher = darker fill → lighter text */
   weight: number
+}
+
+interface GeoMeta {
+  lat: number
+  lng: number
+  areaKm2: number
 }
 
 function formatLossLabel(frac: number, areaLostKm2: number, detailed: boolean): string {
@@ -56,16 +65,22 @@ const LOSS_LEGEND = [
   { label: 'High share lost', color: 'rgb(176, 70, 40)' },
 ] as const
 
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 export function EarthGlobe({
   seaLevelM,
   warmingC,
   mapMode,
+  playing,
   selectedId,
   onSelect,
 }: EarthGlobeProps) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
   const { features, loading } = useCountries()
+  const isMobile = useIsMobile()
   const [dims, setDims] = useState({ w: 800, h: 600 })
   const [hoverId, setHoverId] = useState<string | null>(null)
 
@@ -74,31 +89,87 @@ export function EarthGlobe({
     if (!el) return
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
-      setDims({ w: Math.max(320, width), h: Math.max(320, height) })
+      setDims({ w: Math.max(300, width), h: Math.max(300, height) })
     })
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
+  // One-time camera + controls setup once the globe + data are ready.
   useEffect(() => {
     const g = globeRef.current
     if (!g || features.length === 0) return
-    g.controls().autoRotate = true
-    g.controls().autoRotateSpeed = 0.28
-    g.controls().enableDamping = true
-    g.pointOfView({ lat: 20, lng: 10, altitude: 2.15 }, 0)
-  }, [features.length])
+    const controls = g.controls()
+    controls.autoRotate = !prefersReducedMotion()
+    controls.autoRotateSpeed = 0.28
+    controls.enableDamping = true
+    g.pointOfView({ lat: 20, lng: 10, altitude: isMobile ? 2.5 : 2.15 }, 0)
+  }, [features.length, isMobile])
 
+  // Cap the device pixel ratio — the single biggest GPU win on phones, where
+  // devicePixelRatio is often 3. Re-apply whenever the canvas is resized.
+  useEffect(() => {
+    const g = globeRef.current
+    if (!g) return
+    const renderer = g.renderer()
+    if (!renderer) return
+    const cap = isMobile ? 1.5 : 2
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap))
+    // Re-apply size (default updateStyle=true, matching react-globe.gl) so the
+    // capped pixel ratio takes effect on the current buffer without desyncing
+    // the canvas CSS size.
+    renderer.setSize(dims.w, dims.h)
+  }, [dims, isMobile, features.length])
+
+  // Pause the render loop entirely when the tab is hidden (battery saver).
+  useEffect(() => {
+    const onVisibility = () => {
+      const g = globeRef.current
+      if (!g) return
+      if (document.hidden) {
+        g.pauseAnimation()
+      } else {
+        g.resumeAnimation()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
+  // Fly to a country when it is selected from the table/search.
   useEffect(() => {
     const g = globeRef.current
     if (!g || !selectedId) return
-    const f = features.find((x) => x.properties.id === selectedId)
-    if (!f) return
-    const [lng, lat] = geoCentroid(f)
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+    const meta = geoMetaById.get(selectedId)
+    if (!meta || !Number.isFinite(meta.lat) || !Number.isFinite(meta.lng)) return
     g.controls().autoRotate = false
-    g.pointOfView({ lat, lng, altitude: 1.55 }, 900)
-  }, [selectedId, features])
+    g.pointOfView(
+      { lat: meta.lat, lng: meta.lng, altitude: isMobile ? 1.8 : 1.55 },
+      900,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId])
+
+  // Centroids + areas never change with the scenario — compute them once so
+  // the per-frame animation work stays cheap.
+  const geoMetaById = useMemo(() => {
+    const m = new Map<string, GeoMeta>()
+    for (const f of features) {
+      const [lng, lat] = geoCentroid(f)
+      m.set(f.properties.id, { lat, lng, areaKm2: f.__areaKm2 ?? 0 })
+    }
+    return m
+  }, [features])
+
+  // Label priority: largest countries first, so a capped budget keeps the
+  // most legible ones.
+  const labelOrder = useMemo(
+    () =>
+      [...features].sort(
+        (a, b) => (b.__areaKm2 ?? 0) - (a.__areaKm2 ?? 0),
+      ),
+    [features],
+  )
 
   const metricsById = useMemo(() => {
     const m = new Map<
@@ -117,13 +188,22 @@ export function EarthGlobe({
     return m
   }, [features, seaLevelM, warmingC])
 
+  // How many numeric labels to draw. Labels are 3D text (expensive), so we
+  // budget hard on mobile and drop them almost entirely while animating.
+  const labelBudget = playing
+    ? isMobile
+      ? 0
+      : 70
+    : isMobile
+      ? 26
+      : 150
+
   const mapLabels = useMemo((): MapLabel[] => {
     const labels: MapLabel[] = []
-    for (const f of features) {
-      const [lng, lat] = geoCentroid(f)
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
+    const pushLabel = (f: CountryFeature) => {
+      const meta = geoMetaById.get(f.properties.id)
+      if (!meta || !Number.isFinite(meta.lat) || !Number.isFinite(meta.lng)) return
       const metrics = metricsById.get(f.properties.id)
-      const areaKm2 = f.__areaKm2 ?? 0
       const detailed =
         f.properties.id === selectedId || f.properties.id === hoverId
 
@@ -132,10 +212,10 @@ export function EarthGlobe({
         labels.push({
           id: f.properties.id,
           name: f.properties.name,
-          lat,
-          lng,
+          lat: meta.lat,
+          lng: meta.lng,
           text: `+${absoluteC.toFixed(1)}°`,
-          areaKm2,
+          areaKm2: meta.areaKm2,
           weight: absoluteC,
         })
       } else {
@@ -144,16 +224,36 @@ export function EarthGlobe({
         labels.push({
           id: f.properties.id,
           name: f.properties.name,
-          lat,
-          lng,
+          lat: meta.lat,
+          lng: meta.lng,
           text: formatLossLabel(frac, areaLostKm2, detailed),
-          areaKm2,
+          areaKm2: meta.areaKm2,
           weight: frac * 20,
         })
       }
     }
+
+    for (let i = 0; i < labelOrder.length && labels.length < labelBudget; i++) {
+      pushLabel(labelOrder[i])
+    }
+    // Always keep the selected / hovered country labelled, even past budget.
+    for (const id of [selectedId, hoverId]) {
+      if (!id || labels.some((l) => l.id === id)) continue
+      const f = features.find((x) => x.properties.id === id)
+      if (f) pushLabel(f)
+    }
     return labels
-  }, [features, metricsById, mapMode, warmingC, selectedId, hoverId])
+  }, [
+    labelOrder,
+    features,
+    geoMetaById,
+    metricsById,
+    mapMode,
+    warmingC,
+    selectedId,
+    hoverId,
+    labelBudget,
+  ])
 
   return (
     <div ref={containerRef} className="globe-stage">
@@ -191,7 +291,9 @@ export function EarthGlobe({
             const f = d as CountryFeature | null
             setHoverId(f?.properties.id ?? null)
             const controls = globeRef.current?.controls()
-            if (controls) controls.autoRotate = !f && !selectedId
+            if (controls && !prefersReducedMotion()) {
+              controls.autoRotate = !f && !selectedId
+            }
           }}
           onPolygonClick={(d: object) => {
             onSelect(d as CountryFeature)
@@ -202,7 +304,7 @@ export function EarthGlobe({
           labelText="text"
           labelAltitude={0.022}
           labelIncludeDot={false}
-          labelResolution={3}
+          labelResolution={2}
           labelsTransitionDuration={0}
           labelSize={(d: object) => {
             const label = d as MapLabel
@@ -228,12 +330,13 @@ export function EarthGlobe({
             const label = d as MapLabel | null
             setHoverId(label?.id ?? null)
             const controls = globeRef.current?.controls()
-            if (controls) controls.autoRotate = !label && !selectedId
+            if (controls && !prefersReducedMotion()) {
+              controls.autoRotate = !label && !selectedId
+            }
           }}
           rendererConfig={{
-            antialias: true,
+            antialias: !isMobile,
             alpha: false,
-            preserveDrawingBuffer: true,
             powerPreference: 'high-performance',
           }}
         />
