@@ -81,7 +81,11 @@ function AppShell() {
             <span className="swatch" style={{ background: scenario.color }} />
             {scenario.shortLabel} · {displayYear} · +{seaLevelM.toFixed(2)} m · +
             {warmingC.toFixed(1)}°C global · map{' '}
-            {mapMode === 'temp' ? 'temperature' : 'land loss'}
+            {mapMode === 'temp'
+              ? 'temperature'
+              : mapMode === 'rain'
+                ? 'rain'
+                : 'land loss'}
           </div>
         </div>
 

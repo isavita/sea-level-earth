@@ -787,6 +787,22 @@ input[type='range'] {
   gap: 0.4rem;
 }
 
+.map-mode-switch.three {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.rain-wet {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: #2a6f7a;
+}
+
+.rain-dry {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--danger);
+}
+
 .map-mode-switch button {
   appearance: none;
   border: 1px solid var(--line);

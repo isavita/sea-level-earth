@@ -1,8 +1,9 @@
 import type { CountryFeature } from './countries'
 import { computeLoss } from './landLoss'
 import { estimateCountryTemp } from './warming'
+import { estimateCountryRain } from './rain'
 
-export type ImpactSortKey = 'area' | 'pct' | 'temp'
+export type ImpactSortKey = 'area' | 'pct' | 'temp' | 'rain' | 'rainDelta'
 
 export interface CountryImpactRow {
   feature: CountryFeature
@@ -15,6 +16,10 @@ export interface CountryImpactRow {
   absoluteC: number
   deltaSince2020C: number
   multiplier: number
+  baselineMm: number
+  futureMm: number
+  deltaMm: number
+  deltaFrac: number
 }
 
 export function rankByImpact(
@@ -30,6 +35,7 @@ export function rankByImpact(
       ? computeLoss(f.__risk, seaLevelM, f.__areaKm2)
       : null
     const temp = estimateCountryTemp(f, warmingC)
+    const rain = estimateCountryRain(f, warmingC)
     const areaKm2 = loss?.areaKm2 ?? f.__areaKm2 ?? 0
     if (areaKm2 <= 0) continue
     rows.push({
@@ -43,16 +49,21 @@ export function rankByImpact(
       absoluteC: temp.absoluteC,
       deltaSince2020C: temp.deltaSince2020C,
       multiplier: temp.multiplier,
+      baselineMm: rain.baselineMm,
+      futureMm: rain.futureMm,
+      deltaMm: rain.deltaMm,
+      deltaFrac: rain.deltaFrac,
     })
   }
 
   rows.sort((a, b) => {
     if (sortBy === 'pct') return b.fractionLost - a.fractionLost
     if (sortBy === 'temp') return b.absoluteC - a.absoluteC
+    if (sortBy === 'rain') return b.futureMm - a.futureMm
+    if (sortBy === 'rainDelta') return b.deltaFrac - a.deltaFrac
     return b.areaLostKm2 - a.areaLostKm2
   })
 
-  // For land sorts, prefer countries with measurable inundation; temp sort shows all.
   if (sortBy === 'area' || sortBy === 'pct') {
     return rows.filter((r) => r.areaLostKm2 > 1).slice(0, limit)
   }

@@ -8,6 +8,9 @@ export interface CountryRisk {
   pctBelow5m: number
   popPctBelow5m: number | null
   fracAt: Record<string, number>
+  /** Annual precipitation depth (mm/yr) from World Bank when available. */
+  precipMm?: number | null
+  precipYear?: number | null
 }
 
 export interface CountryRiskFile {

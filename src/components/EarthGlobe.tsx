@@ -6,9 +6,15 @@ import { lossColor } from '../lib/countries'
 import { useCountries } from '../lib/CountriesContext'
 import type { CountryFeature } from '../lib/countries'
 import { estimateCountryTemp, tempColor, TEMP_LEGEND } from '../lib/warming'
+import {
+  estimateCountryRain,
+  formatDeltaFrac,
+  rainDeltaColor,
+  RAIN_LEGEND,
+} from '../lib/rain'
 import { useIsMobile } from '../lib/useIsMobile'
 
-export type MapMode = 'temp' | 'loss'
+export type MapMode = 'temp' | 'loss' | 'rain'
 
 interface EarthGlobeProps {
   seaLevelM: number
@@ -176,15 +182,26 @@ export function EarthGlobe({
   const metricsById = useMemo(() => {
     const m = new Map<
       string,
-      { frac: number; absoluteC: number; areaLostKm2: number }
+      {
+        frac: number
+        absoluteC: number
+        areaLostKm2: number
+        futureMm: number
+        deltaMm: number
+        deltaFrac: number
+      }
     >()
     for (const f of features) {
       const frac = f.__risk ? fractionLostAtRise(f.__risk, seaLevelM) : 0
       const areaKm2 = f.__areaKm2 ?? 0
+      const rain = estimateCountryRain(f, warmingC)
       m.set(f.properties.id, {
         frac,
         absoluteC: estimateCountryTemp(f, warmingC).absoluteC,
         areaLostKm2: areaKm2 * frac,
+        futureMm: rain.futureMm,
+        deltaMm: rain.deltaMm,
+        deltaFrac: rain.deltaFrac,
       })
     }
     return m
@@ -216,6 +233,19 @@ export function EarthGlobe({
           text: `+${absoluteC.toFixed(1)}°`,
           areaKm2: meta.areaKm2,
           weight: absoluteC,
+        })
+      } else if (mapMode === 'rain') {
+        const deltaFrac = metrics?.deltaFrac ?? 0
+        const futureMm = metrics?.futureMm ?? 0
+        const pct = formatDeltaFrac(deltaFrac)
+        labels.push({
+          id: f.properties.id,
+          name: f.properties.name,
+          lat: meta.lat,
+          lng: meta.lng,
+          text: detailed ? `${pct} · ${futureMm.toFixed(0)} mm` : pct,
+          areaKm2: meta.areaKm2,
+          weight: Math.abs(deltaFrac) * 20 + (deltaFrac < 0 ? 1 : 0),
         })
       } else {
         const frac = metrics?.frac ?? 0
@@ -279,6 +309,9 @@ export function EarthGlobe({
             if (id === selectedId) return 'rgba(255, 236, 200, 0.98)'
             if (mapMode === 'temp') {
               return tempColor(metrics?.absoluteC ?? warmingC, hovered)
+            }
+            if (mapMode === 'rain') {
+              return rainDeltaColor(metrics?.deltaFrac ?? 0, hovered)
             }
             return lossColor(metrics?.frac ?? 0, hovered)
           }}
@@ -358,6 +391,21 @@ export function EarthGlobe({
             </div>
             <span className="temp-legend-note">
               Labels = each country’s Δ°C
+            </span>
+          </>
+        ) : mapMode === 'rain' ? (
+          <>
+            <span className="temp-legend-title">Rainfall change vs ~2020s</span>
+            <div className="temp-legend-scale">
+              {RAIN_LEGEND.map((s) => (
+                <span key={s.label} className="temp-legend-stop">
+                  <i style={{ background: s.color }} />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <span className="temp-legend-note">
+              Labels = Δ rain % (hover for mm/yr)
             </span>
           </>
         ) : (

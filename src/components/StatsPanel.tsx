@@ -7,6 +7,12 @@ import {
 import { useCountries } from '../lib/CountriesContext'
 import type { CountryFeature } from '../lib/countries'
 import { estimateCountryTemp, formatDeltaC } from '../lib/warming'
+import {
+  estimateCountryRain,
+  formatDeltaFrac,
+  formatDeltaMm,
+  formatMm,
+} from '../lib/rain'
 import { rankByImpact, type ImpactSortKey } from '../lib/impact'
 import type { MapMode } from './EarthGlobe'
 
@@ -39,25 +45,28 @@ export function StatsPanel({
   const totals = useMemo(() => {
     let lost = 0
     let base = 0
-    let affected = 0
     let hottest = 0
+    let wettestDelta = -Infinity
+    let driestDelta = Infinity
     for (const f of features) {
       if (!f.__areaKm2) continue
       const temp = estimateCountryTemp(f, warmingC)
+      const rain = estimateCountryRain(f, warmingC)
       hottest = Math.max(hottest, temp.absoluteC)
+      wettestDelta = Math.max(wettestDelta, rain.deltaFrac)
+      driestDelta = Math.min(driestDelta, rain.deltaFrac)
       if (!f.__risk) continue
       const row = computeLoss(f.__risk, seaLevelM, f.__areaKm2)
       if (!row) continue
       base += row.areaKm2
       lost += row.areaLostKm2
-      if (row.areaLostKm2 > 1) affected += 1
     }
     return {
       lost,
-      base,
-      affected,
       pct: base > 0 ? lost / base : 0,
       hottest,
+      wettestDelta: Number.isFinite(wettestDelta) ? wettestDelta : 0,
+      driestDelta: Number.isFinite(driestDelta) ? driestDelta : 0,
     }
   }, [features, seaLevelM, warmingC])
 
@@ -71,22 +80,27 @@ export function StatsPanel({
     return estimateCountryTemp(selected, warmingC)
   }, [selected, warmingC])
 
+  const selectedRain = useMemo(() => {
+    if (!selected) return null
+    return estimateCountryRain(selected, warmingC)
+  }, [selected, warmingC])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return ranking
-    return rankByImpact(features, seaLevelM, warmingC, 500, sortBy).filter(
-      (r) => r.name.toLowerCase().includes(q),
-    ).slice(0, 30)
+    return rankByImpact(features, seaLevelM, warmingC, 500, sortBy)
+      .filter((r) => r.name.toLowerCase().includes(q))
+      .slice(0, 30)
   }, [query, ranking, features, seaLevelM, warmingC, sortBy])
 
   return (
     <section className="panel stats">
       <header className="panel-head">
         <p className="eyebrow">Territory</p>
-        <h2>Land & temperature</h2>
+        <h2>Land, heat & rain</h2>
       </header>
 
-      <div className="map-mode-switch" role="tablist" aria-label="Map colour">
+      <div className="map-mode-switch three" role="tablist" aria-label="Map colour">
         <button
           type="button"
           role="tab"
@@ -97,7 +111,19 @@ export function StatsPanel({
             setSortBy('temp')
           }}
         >
-          Map: temperature
+          Temperature
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mapMode === 'rain'}
+          className={mapMode === 'rain' ? 'active' : undefined}
+          onClick={() => {
+            onMapMode('rain')
+            setSortBy('rainDelta')
+          }}
+        >
+          Rain
         </button>
         <button
           type="button"
@@ -109,7 +135,7 @@ export function StatsPanel({
             setSortBy('area')
           }}
         >
-          Map: land loss
+          Land loss
         </button>
       </div>
 
@@ -120,13 +146,21 @@ export function StatsPanel({
           <em>{formatPct(totals.pct)} of measured land</em>
         </div>
         <div>
-          <span className="totals-label">Hottest local warming</span>
-          <strong>+{totals.hottest.toFixed(1)}°C</strong>
-          <em>vs pre-industrial</em>
+          <span className="totals-label">
+            {mapMode === 'rain' ? 'Largest rain swings' : 'Hottest local warming'}
+          </span>
+          <strong>
+            {mapMode === 'rain'
+              ? `${formatDeltaFrac(totals.wettestDelta)} / ${formatDeltaFrac(totals.driestDelta)}`
+              : `+${totals.hottest.toFixed(1)}°C`}
+          </strong>
+          <em>
+            {mapMode === 'rain' ? 'wettest / driest Δ%' : 'vs pre-industrial'}
+          </em>
         </div>
       </div>
 
-      {selected && selectedTemp && (
+      {selected && selectedTemp && selectedRain && (
         <article className="country-card">
           <div className="country-card-top">
             <h3>{selected.properties.name}</h3>
@@ -135,14 +169,6 @@ export function StatsPanel({
             </button>
           </div>
           <dl className="country-metrics four">
-            <div>
-              <dt>Land left</dt>
-              <dd>
-                {formatArea(
-                  selectedLoss?.areaRemainingKm2 ?? selected.__areaKm2 ?? 0,
-                )}
-              </dd>
-            </div>
             <div>
               <dt>Land lost</dt>
               <dd className="danger">
@@ -154,20 +180,28 @@ export function StatsPanel({
               <dt>Local warming</dt>
               <dd>
                 +{selectedTemp.absoluteC.toFixed(1)}°C
-                <span>vs pre-industrial</span>
+                <span>{formatDeltaC(selectedTemp.deltaSince2020C)} since 2020s</span>
               </dd>
             </div>
             <div>
-              <dt>Since 2020s</dt>
+              <dt>Rain now→future</dt>
               <dd>
-                {formatDeltaC(selectedTemp.deltaSince2020C)}
-                <span>{selectedTemp.multiplier.toFixed(1)}× global</span>
+                {formatMm(selectedRain.futureMm)}
+                <span>from {formatMm(selectedRain.baselineMm)}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Rain Δ</dt>
+              <dd className={selectedRain.deltaMm < 0 ? 'danger' : undefined}>
+                {formatDeltaMm(selectedRain.deltaMm)}
+                <span>{formatDeltaFrac(selectedRain.deltaFrac)}</span>
               </dd>
             </div>
           </dl>
           <p className="hint">
-            High-latitude countries warm faster than the global average (Arctic
-            amplification). Sketch based on latitude — not a full climate model.
+            Rain baseline from World Bank where available; change is a
+            latitude-pattern sketch scaled by warming (subtropics often drier,
+            high latitudes / deep tropics wetter) — not a full climate model.
             {selectedLoss &&
               selectedLoss.country.pctBelow5m > 0 &&
               ` ${selectedLoss.country.pctBelow5m.toFixed(1)}% of land is ≤5 m (LECZ).`}
@@ -203,21 +237,33 @@ export function StatsPanel({
               <th>
                 <button
                   type="button"
-                  className={sortBy === 'pct' ? 'sort-btn active' : 'sort-btn'}
-                  onClick={() => setSortBy('pct')}
-                  aria-pressed={sortBy === 'pct'}
-                >
-                  %{sortBy === 'pct' ? ' ↓' : ''}
-                </button>
-              </th>
-              <th>
-                <button
-                  type="button"
                   className={sortBy === 'temp' ? 'sort-btn active' : 'sort-btn'}
                   onClick={() => setSortBy('temp')}
                   aria-pressed={sortBy === 'temp'}
                 >
                   Δ°C{sortBy === 'temp' ? ' ↓' : ''}
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  className={
+                    sortBy === 'rainDelta' ? 'sort-btn active' : 'sort-btn'
+                  }
+                  onClick={() => setSortBy('rainDelta')}
+                  aria-pressed={sortBy === 'rainDelta'}
+                >
+                  Δ rain{sortBy === 'rainDelta' ? ' ↓' : ''}
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  className={sortBy === 'rain' ? 'sort-btn active' : 'sort-btn'}
+                  onClick={() => setSortBy('rain')}
+                  aria-pressed={sortBy === 'rain'}
+                >
+                  mm{sortBy === 'rain' ? ' ↓' : ''}
                 </button>
               </th>
             </tr>
@@ -233,8 +279,11 @@ export function StatsPanel({
                 >
                   <td>{row.name}</td>
                   <td>{formatArea(row.areaLostKm2)}</td>
-                  <td>{formatPct(row.fractionLost)}</td>
                   <td className="temp-cell">+{row.absoluteC.toFixed(1)}</td>
+                  <td className={row.deltaMm < 0 ? 'rain-dry' : 'rain-wet'}>
+                    {formatDeltaFrac(row.deltaFrac)}
+                  </td>
+                  <td>{row.futureMm.toFixed(0)}</td>
                 </tr>
               )
             })}
@@ -243,8 +292,8 @@ export function StatsPanel({
       </div>
 
       <p className="footnote">
-        Δ°C is local mean warming vs pre-industrial (latitude amplification).
-        Sort by Lost, %, or temperature. Map colours follow the toggle above.
+        Δ°C vs pre-industrial; rain mm/yr is projected annual depth; Δ rain is
+        vs ~2020s baseline. Sort any column. Map colours follow the toggle.
       </p>
     </section>
   )
