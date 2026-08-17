@@ -15,6 +15,12 @@ export interface Scenario {
   description: string
   /** Plain-language: what would have to be true for this path. */
   whatItTakes: string[]
+  /** Short badge on how plausible this pathway is. */
+  plausibility: string
+  /** Badge tone, low → high concern. */
+  plausibilityTone: 'reference' | 'good' | 'likely' | 'high' | 'extreme'
+  /** Signature consequences around 2100 — what this world actually feels like. */
+  atAGlance: string[]
   /** Global mean surface warming vs pre-industrial by year (°C). */
   warmingByYear: Record<number, number>
   warmingLabel: string
@@ -36,6 +42,13 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
       'Global emissions drop to near zero almost immediately and stay there',
       'No further fossil CO₂ added to the atmosphere',
       'Existing warming does not keep raising seas (in reality, some rise is already locked in)',
+    ],
+    plausibility: 'Reference only — already impossible',
+    plausibilityTone: 'reference',
+    atAGlance: [
+      'Seas still creep up ~0.2 m by 2100 from heat already stored in the ocean',
+      'Most warm-water coral reefs remain at high risk even at today’s temperature',
+      'Useful as the “what we already bought” line, not as a future to plan for',
     ],
     warmingByYear: {
       2020: 1.15,
@@ -69,6 +82,13 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
       'Strong international climate policy, clean power, efficiency, and land sinks',
       'Rough remaining carbon budget: on the order of a few hundred GtCO₂ from now',
     ],
+    plausibility: 'Achievable, but needs action now',
+    plausibilityTone: 'good',
+    atAGlance: [
+      'Seas +0.44 m by 2100 — costly for coasts, but defendable for most cities',
+      'Ice-free Arctic Septembers happen, then stay rare rather than becoming normal',
+      'Glacier-fed rivers still pass peak water, so Asian water stress arrives anyway',
+    ],
     warmingByYear: {
       2020: 1.15,
       2030: 1.35,
@@ -100,6 +120,13 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
       'Some climate policy and technology progress, incomplete fossil phase-out',
       'Continuing oil/gas use for decades; coal declines slowly',
       'Close to many “stated policies / middle of the road” outlooks',
+    ],
+    plausibility: 'Where today’s policies point',
+    plausibilityTone: 'likely',
+    atAGlance: [
+      'Seas +0.56 m by 2100 and still rising — repeated flooding becomes routine',
+      'Ice-free Arctic summers become normal from roughly the 2040s',
+      'Colorado, Tigris–Euphrates and Murray–Darling all lose over a tenth of their flow',
     ],
     warmingByYear: {
       2020: 1.15,
@@ -133,6 +160,13 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
       'High energy demand from fossil-fuelled growth; weak efficiency gains',
       'Cumulative emissions many times larger than 1.5–2°C budgets',
     ],
+    plausibility: 'High-end, now considered less likely',
+    plausibilityTone: 'high',
+    atAGlance: [
+      'Seas +0.77 m by 2100, with several more metres already locked in beyond',
+      'Roughly 750M people live in river basins that have lost significant flow',
+      'Parts of the tropics pass the limits of human heat tolerance during heatwaves',
+    ],
     warmingByYear: {
       2020: 1.15,
       2030: 1.55,
@@ -165,6 +199,13 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
       'Weak or reversed mitigation after mid-century',
       'Not the IPCC “central” story — a high-end “what if both go wrong” case',
     ],
+    plausibility: 'Low-likelihood stress test',
+    plausibilityTone: 'extreme',
+    atAGlance: [
+      'Seas +1.2 m by 2100 and accelerating hard into the 2100s',
+      'Greenland and West Antarctica committed to multi-metre, multi-century loss',
+      'The Indus and Amu Darya lose roughly half their flow as the glaciers run out',
+    ],
     warmingByYear: {
       2020: 1.15,
       2030: 1.7,
@@ -196,6 +237,13 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
       'High climate sensitivity + carbon-cycle feedbacks (permafrost CO₂/CH₄, forest dieback)',
       'Possible major ice-sheet collapse contributions to sea level',
       'Would require a deliberate “burn everything” world — treated here as a warning envelope, not a prediction',
+    ],
+    plausibility: 'Warning envelope — not a forecast',
+    plausibilityTone: 'extreme',
+    atAGlance: [
+      'Seas +2 m by 2100 and around +10 m by 2300 — coastlines redrawn worldwide',
+      'Most glacier-fed rivers collapse after their meltwater is exhausted',
+      'Shown to bound the risk space, not because anyone expects this path',
     ],
     warmingByYear: {
       2020: 1.15,

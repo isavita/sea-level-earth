@@ -88,7 +88,9 @@ export function StatsPanel({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return ranking
-    return rankByImpact(features, seaLevelM, warmingC, 500, sortBy)
+    // Search every country, including ones the land sorts would hide — a
+    // landlocked country must still be findable by name.
+    return rankByImpact(features, seaLevelM, warmingC, 500, sortBy, false)
       .filter((r) => r.name.toLowerCase().includes(q))
       .slice(0, 30)
   }, [query, ranking, features, seaLevelM, warmingC, sortBy])
@@ -100,11 +102,12 @@ export function StatsPanel({
         <h2>Land, heat & rain</h2>
       </header>
 
-      <div className="map-mode-switch three" role="tablist" aria-label="Map colour">
+      {/* Radiogroup: picks the globe colouring, does not reveal panels. */}
+      <div className="map-mode-switch three" role="radiogroup" aria-label="Map colour">
         <button
           type="button"
-          role="tab"
-          aria-selected={mapMode === 'temp'}
+          role="radio"
+          aria-checked={mapMode === 'temp'}
           className={mapMode === 'temp' ? 'active' : undefined}
           onClick={() => {
             onMapMode('temp')
@@ -115,8 +118,8 @@ export function StatsPanel({
         </button>
         <button
           type="button"
-          role="tab"
-          aria-selected={mapMode === 'rain'}
+          role="radio"
+          aria-checked={mapMode === 'rain'}
           className={mapMode === 'rain' ? 'active' : undefined}
           onClick={() => {
             onMapMode('rain')
@@ -127,8 +130,8 @@ export function StatsPanel({
         </button>
         <button
           type="button"
-          role="tab"
-          aria-selected={mapMode === 'loss'}
+          role="radio"
+          aria-checked={mapMode === 'loss'}
           className={mapMode === 'loss' ? 'active' : undefined}
           onClick={() => {
             onMapMode('loss')
@@ -287,6 +290,13 @@ export function StatsPanel({
                 </tr>
               )
             })}
+            {filtered.length === 0 && (
+              <tr className="empty-row">
+                <td colSpan={5}>
+                  No country matches “{query.trim()}”.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

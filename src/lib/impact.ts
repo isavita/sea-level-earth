@@ -28,6 +28,13 @@ export function rankByImpact(
   warmingC: number,
   limit = 25,
   sortBy: ImpactSortKey = 'temp',
+  /**
+   * Land sorts normally hide countries with no measurable inundation, which
+   * keeps the leaderboard meaningful. Searching must not inherit that filter,
+   * or looking up a landlocked country returns nothing and reads as a broken
+   * search box.
+   */
+  hideUnaffected = true,
 ): CountryImpactRow[] {
   const rows: CountryImpactRow[] = []
   for (const f of features) {
@@ -64,7 +71,7 @@ export function rankByImpact(
     return b.areaLostKm2 - a.areaLostKm2
   })
 
-  if (sortBy === 'area' || sortBy === 'pct') {
+  if (hideUnaffected && (sortBy === 'area' || sortBy === 'pct')) {
     return rows.filter((r) => r.areaLostKm2 > 1).slice(0, limit)
   }
   return rows.slice(0, limit)

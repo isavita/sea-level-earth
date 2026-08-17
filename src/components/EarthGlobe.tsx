@@ -114,7 +114,9 @@ export function EarthGlobe({
     if (!el) return
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
-      setDims({ w: Math.max(300, width), h: Math.max(300, height) })
+      // Floor kept below the narrowest phone (320px minus page padding) so the
+      // canvas never forces its container to overflow and crop the globe.
+      setDims({ w: Math.max(240, width), h: Math.max(240, height) })
     })
     ro.observe(el)
     return () => ro.disconnect()

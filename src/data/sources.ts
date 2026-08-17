@@ -1,0 +1,165 @@
+/**
+ * Where the numbers come from, how this model works, and where to go next.
+ *
+ * Every external link here is a stable, canonical home page for a major
+ * climate institution or tool — no deep links that rot.
+ */
+
+export interface ReadingLink {
+  title: string
+  href: string
+  blurb: string
+  /** Short tag shown on the card. */
+  kind: 'Report' | 'Tool' | 'Tracker' | 'Data' | 'Explainer'
+}
+
+export interface ReadingGroup {
+  heading: string
+  intro: string
+  links: ReadingLink[]
+}
+
+export const READING_GROUPS: ReadingGroup[] = [
+  {
+    heading: 'Model it yourself',
+    intro:
+      'This globe is a sketch. These let you turn the dials properly — and are the best next step if the scenarios here raised a question.',
+    links: [
+      {
+        title: 'En-ROADS climate simulator',
+        href: 'https://en-roads.climateinteractive.org/',
+        kind: 'Tool',
+        blurb:
+          'Move sliders on energy, pricing, forests and methane and watch 2100 warming respond live. The single best way to feel why some levers matter more than others.',
+      },
+      {
+        title: 'IPCC AR6 Sea Level Projection Tool',
+        href: 'https://sealevel.nasa.gov/ipcc-ar6-sea-level-projection-tool',
+        kind: 'Tool',
+        blurb:
+          'NASA’s official interface to the AR6 sea-level projections — by scenario, by year, and crucially by location, including the low-confidence ice-sheet branches.',
+      },
+      {
+        title: 'Climate Central coastal risk screening',
+        href: 'https://coastal.climatecentral.org/',
+        kind: 'Tool',
+        blurb:
+          'Street-level maps of what actually floods at a given sea level. This is the local detail a country-scale globe cannot give you.',
+      },
+    ],
+  },
+  {
+    heading: 'The science behind the pathways',
+    intro:
+      'The warming and sea-level numbers in this app are shaped by these assessments.',
+    links: [
+      {
+        title: 'IPCC AR6 — The Physical Science Basis',
+        href: 'https://www.ipcc.ch/report/ar6/wg1/',
+        kind: 'Report',
+        blurb:
+          'The Working Group I report behind every range used here. The Summary for Policymakers is readable in an hour and is the reference for warming, sea level and ice.',
+      },
+      {
+        title: 'How the SSP pathways work',
+        href: 'https://www.carbonbrief.org/explainer-how-shared-socioeconomic-pathways-explore-future-climate-change/',
+        kind: 'Explainer',
+        blurb:
+          'Carbon Brief’s plain-English guide to SSP1-2.6, SSP2-4.5 and SSP5-8.5 — what each socioeconomic story assumes, and why SSP5-8.5 is now treated as a high-end case.',
+      },
+      {
+        title: 'Climate Action Tracker',
+        href: 'https://climateactiontracker.org/',
+        kind: 'Tracker',
+        blurb:
+          'Where current policies and pledges actually put 2100 warming. The reality check on the “Current trend” pathway in this app.',
+      },
+    ],
+  },
+  {
+    heading: 'Watch it happen',
+    intro: 'Monitoring programmes publishing what the planet is doing now.',
+    links: [
+      {
+        title: 'NSIDC Arctic Sea Ice News & Analysis',
+        href: 'https://nsidc.org/arcticseaicenews/',
+        kind: 'Data',
+        blurb:
+          'Monthly Arctic sea-ice extent with expert commentary — the observational record behind the ice panel.',
+      },
+      {
+        title: 'World Glacier Monitoring Service',
+        href: 'https://wgms.ch/',
+        kind: 'Data',
+        blurb:
+          'Global glacier mass-balance records. This is the evidence base for peak water in the Indus, Amu Darya and Andean basins.',
+      },
+      {
+        title: 'Copernicus Climate Change Service',
+        href: 'https://climate.copernicus.eu/',
+        kind: 'Data',
+        blurb:
+          'Europe’s monthly global temperature and climate bulletins — how far along the pathway we currently are.',
+      },
+      {
+        title: 'Our World in Data — CO₂ & greenhouse gases',
+        href: 'https://ourworldindata.org/co2-and-greenhouse-gas-emissions',
+        kind: 'Data',
+        blurb:
+          'Emissions by country, sector and person, with the historical cumulative totals that decide which pathway is still reachable.',
+      },
+    ],
+  },
+]
+
+export interface ModelNote {
+  title: string
+  body: string
+}
+
+/** How each layer of this app is actually computed. */
+export const MODEL_NOTES: ModelNote[] = [
+  {
+    title: 'Warming pathways',
+    body: 'Each pathway is a curve of global mean temperature and sea level through anchor years (2020, 2030, 2050, 2100, 2150, 2300), interpolated in between. The values are shaped to IPCC AR6 central estimates; the 6°C and 8°C paths sit deliberately beyond the assessed ranges as stress tests.',
+  },
+  {
+    title: 'Country temperature',
+    body: 'Local warming is the global figure multiplied by a latitude factor, so high-latitude countries warm faster (Arctic amplification). It is a sketch of a real pattern, not a downscaled climate model — it has no continentality, altitude or ocean-current detail.',
+  },
+  {
+    title: 'Land lost to the sea',
+    body: 'Each country carries a measured share of land below 5 m (the low-elevation coastal zone). Losses at other heights are interpolated from that share, so this shows exposure by elevation — not flood defences, land subsidence, sediment gain, or where a specific city floods.',
+  },
+  {
+    title: 'Rainfall',
+    body: 'A smooth zonal pattern — wet tropics, dry subtropics, wetter mid and high latitudes — plus regional corrections for the monsoons, the Mediterranean, southwest North America, southern Africa, Chile, southern Australia and eastern Amazonia, where latitude alone gets the sign wrong.',
+  },
+  {
+    title: 'Rivers',
+    body: 'Flow combines three competing mechanisms: glacier melt on a peak-water curve, snowpack whose annual loss scales with basin warmth, and rainfall net of evaporation. This is why some rivers rise before they fall, and why a basin can keep its rain and still lose its river.',
+  },
+  {
+    title: 'Ice',
+    body: 'Arctic summer sea ice is treated as near-linear with warming (AR6 finds no classical tipping point). The Greenland and Antarctic sheets move on century-to-millennial clocks, so their bars change slowly even under extreme forcing — the committed loss is far larger than the loss shown by 2300.',
+  },
+]
+
+/** Concrete provenance for the data files this app ships. */
+export const DATA_SOURCES: ModelNote[] = [
+  {
+    title: 'Coastal exposure',
+    body: 'World Bank WDI (AG.LND.EL5M.ZS, AG.LND.TOTL.K2, 2015), derived from CIESIN’s Low Elevation Coastal Zone dataset.',
+  },
+  {
+    title: 'Baseline rainfall',
+    body: 'World Bank country climatology (mm/yr) where available, with a latitude fallback elsewhere — the panel marks which is in use.',
+  },
+  {
+    title: 'Country shapes',
+    body: 'Natural Earth 1:50m boundaries, served as TopoJSON and rendered on a WebGL globe.',
+  },
+]
+
+export const LIMITS_NOTE =
+  'Meridian is an illustrative teaching model, not a forecast and not a flood map. It runs a handful of tuned curves in your browser rather than a general circulation model, and it cannot tell you what will happen to a specific street, farm or house. Use the tools above for decisions that matter.'

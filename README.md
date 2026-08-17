@@ -52,7 +52,22 @@ hashed assets, SPA fallback). See **Deploy on Railway** below.
 | Very hot 6°C | ~6°C | High emissions + high climate sensitivity |
 | Catastrophic 8°C | ~8°C | Warning envelope — “burn everything” + feedbacks |
 
-Each pathway shows a **What it takes** list in the UI. Year range: **2020–2300**.
+Each pathway carries a plausibility badge (from *“reference only — already
+impossible”* through *“where today’s policies point”* to *“warning envelope —
+not a forecast”*), a **What this world looks like by 2100** summary, and a
+**What it takes to get here** list. The chips also draw a bar scaled to each
+pathway's 2100 warming, so the six can be compared at a glance. Year range:
+**2020–2300**.
+
+## Layout
+
+- **Desktop** — three columns: pathway controls, globe, country table.
+- **Tablet** — globe spans the top, panels sit in two columns beneath it.
+- **Phone** — the globe is pinned to the top and the four panels sit behind a
+  tab bar (Pathway / Countries / Ice / Rivers), one at a time. Stacking them
+  produced a 4.4-screen scroll that buried the controls; this keeps it to
+  about 1.3 screens with the globe always visible. Landscape phones unpin the
+  globe so the controls still fit.
 
 ## Ice
 

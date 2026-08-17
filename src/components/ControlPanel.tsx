@@ -17,6 +17,11 @@ interface ControlPanelProps {
   onTogglePlay: () => void
 }
 
+/** Hottest 2100 value across pathways, for scaling the comparison bars. */
+const MAX_2100_C = Math.max(
+  ...SCENARIO_ORDER.map((id) => SCENARIOS[id].warmingByYear[2100]),
+)
+
 export function ControlPanel({
   scenarioId,
   year,
@@ -37,41 +42,39 @@ export function ControlPanel({
         <h2>Warming pathway</h2>
       </header>
 
-      <div className="scenario-switch multi" role="tablist" aria-label="Climate scenario">
+      {/* Radiogroup, not a tablist: these pick a value, they don't reveal
+          panels, and role="tab" without a tabpanel is an invalid pattern. */}
+      <div
+        className="scenario-switch multi"
+        role="radiogroup"
+        aria-label="Climate scenario"
+      >
         {SCENARIO_ORDER.map((id) => {
           const s = SCENARIOS[id]
           const active = id === scenarioId
+          const share = (s.warmingByYear[2100] / MAX_2100_C) * 100
           return (
             <button
               key={id}
               type="button"
-              role="tab"
-              aria-selected={active}
+              role="radio"
+              aria-checked={active}
               className={active ? 'scenario active' : 'scenario'}
               onClick={() => onScenario(id)}
               style={{ ['--sc' as string]: s.color }}
             >
               <span className="scenario-label">{s.shortLabel}</span>
               <span className="scenario-warm">{s.warmingLabel}</span>
+              <span className="scenario-bar" aria-hidden>
+                <i style={{ width: `${share}%` }} />
+              </span>
             </button>
           )
         })}
       </div>
 
-      <p className="scenario-desc">{scenario.description}</p>
-
-      <div
-        className="what-it-takes"
-        style={{ ['--sc' as string]: scenario.color }}
-      >
-        <p className="what-it-takes-title">What it takes for this to happen</p>
-        <ul>
-          {scenario.whatItTakes.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
-
+      {/* Controls come before the reading material: on a phone the play button
+          used to sit below two long bullet lists. */}
       <div className="year-block">
         <div className="year-row">
           <button
@@ -128,6 +131,34 @@ export function ControlPanel({
           </dd>
         </div>
       </dl>
+
+      <div className="scenario-detail" style={{ ['--sc' as string]: scenario.color }}>
+        <div className="scenario-detail-top">
+          <h3>{scenario.label}</h3>
+          <span className={`plausibility ${scenario.plausibilityTone}`}>
+            {scenario.plausibility}
+          </span>
+        </div>
+        <p className="scenario-desc">{scenario.description}</p>
+      </div>
+
+      <details className="scenario-details" open>
+        <summary>What this world looks like by 2100</summary>
+        <ul className="at-a-glance">
+          {scenario.atAGlance.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </details>
+
+      <details className="scenario-details">
+        <summary>What it takes to get here</summary>
+        <ul>
+          {scenario.whatItTakes.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </details>
     </section>
   )
 }

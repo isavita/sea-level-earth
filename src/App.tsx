@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { ControlPanel } from './components/ControlPanel'
 import type { MapMode } from './components/EarthGlobe'
 import { IcePanel } from './components/IcePanel'
+import { LearnPanel } from './components/LearnPanel'
 import { RiverPanel } from './components/RiverPanel'
 import { StatsPanel } from './components/StatsPanel'
 import {
@@ -16,7 +17,43 @@ import { iceState } from './data/ice'
 import { CountriesProvider, useCountries } from './lib/CountriesContext'
 import type { CountryFeature } from './lib/countries'
 import { useTimelinePlayback } from './lib/useTimelinePlayback'
+import { useIsMobile } from './lib/useIsMobile'
 import './App.css'
+
+type PanelTabId = 'pathway' | 'ice' | 'rivers' | 'countries' | 'learn'
+
+/** Stroke icons for the bottom bar — inline so there is no icon dependency. */
+const ICONS: Record<PanelTabId, string> = {
+  pathway: 'M3 17.5 9 11l4 4 8-9',
+  countries:
+    'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M3.5 9h17M3.5 15h17M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18',
+  ice: 'M12 2v20M4 7l16 10M20 7 4 17M12 6.5 9.5 4M12 6.5 14.5 4M12 17.5 9.5 20M12 17.5l2.5 2.5',
+  rivers: 'M3 8c3-2 5 2 8 0s5-2 8 0M3 13c3-2 5 2 8 0s5-2 8 0M3 18c3-2 5 2 8 0s5-2 8 0',
+  learn: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5zM19 18v3H6.5',
+}
+
+const PANEL_TABS: { id: PanelTabId; label: string }[] = [
+  { id: 'pathway', label: 'Pathway' },
+  { id: 'countries', label: 'Countries' },
+  { id: 'ice', label: 'Ice' },
+  { id: 'rivers', label: 'Rivers' },
+  { id: 'learn', label: 'Learn' },
+]
+
+function TabIcon({ id }: { id: PanelTabId }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path
+        d={ICONS[id]}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
 
 // Three.js is ~1.5 MB — split it into its own chunk so the shell + controls
 // paint immediately while the globe streams in.
@@ -35,6 +72,7 @@ function AppShell() {
   const [selected, setSelected] = useState<CountryFeature | null>(null)
   const [mapMode, setMapMode] = useState<MapMode>('temp')
   const [selectedRiverId, setSelectedRiverId] = useState<string | null>(null)
+  const [panelTab, setPanelTab] = useState<PanelTabId>('pathway')
 
   const scenario = SCENARIOS[scenarioId]
   const seaLevelM = useMemo(
@@ -47,15 +85,68 @@ function AppShell() {
   )
   const ice = useMemo(() => iceState(scenario, year), [scenario, year])
   const displayYear = Math.round(year)
+  const isMobile = useIsMobile()
+
+  // Rivers only draw on the globe in the rain view, so picking one switches
+  // the map there — and on mobile brings its panel to the front.
+  const selectRiver = (id: string | null) => {
+    setSelectedRiverId(id)
+    if (!id) return
+    setMapMode('rain')
+    setPanelTab('rivers')
+  }
+
+  // Tapping a country on the globe should reveal its numbers, which on mobile
+  // live behind the Countries tab.
+  const selectCountry = (feature: CountryFeature | null) => {
+    setSelected(feature)
+    if (feature) setPanelTab('countries')
+  }
+
+  const panels = {
+    pathway: (
+      <ControlPanel
+        scenarioId={scenarioId}
+        year={displayYear}
+        seaLevelM={seaLevelM}
+        warmingC={warmingC}
+        playing={playing}
+        onScenario={setScenarioId}
+        onYear={setYear}
+        onTogglePlay={togglePlay}
+      />
+    ),
+    ice: <IcePanel ice={ice} year={displayYear} warmingC={warmingC} />,
+    rivers: (
+      <RiverPanel
+        warmingC={warmingC}
+        year={displayYear}
+        selectedRiverId={selectedRiverId}
+        onSelectRiver={selectRiver}
+      />
+    ),
+    learn: <LearnPanel />,
+    countries: (
+      <StatsPanel
+        seaLevelM={seaLevelM}
+        warmingC={warmingC}
+        mapMode={mapMode}
+        onMapMode={setMapMode}
+        selected={selected}
+        onSelectId={(id) => {
+          if (!id) {
+            setSelected(null)
+            return
+          }
+          setSelected(getById(id) ?? null)
+        }}
+      />
+    ),
+  }
 
   // Rivers are only drawn on the globe in the rain view, so picking one from
   // the panel switches the map there — otherwise the camera flies to a basin
   // the user cannot actually see.
-  const selectRiver = (id: string | null) => {
-    setSelectedRiverId(id)
-    if (id) setMapMode('rain')
-  }
-
   return (
     <div className="app">
       <header className="topbar">
@@ -84,7 +175,7 @@ function AppShell() {
               mapMode={mapMode}
               playing={playing}
               selectedId={selected?.properties.id ?? null}
-              onSelect={setSelected}
+              onSelect={selectCountry}
               selectedRiverId={selectedRiverId}
               onSelectRiver={selectRiver}
             />
@@ -101,45 +192,64 @@ function AppShell() {
           </div>
         </div>
 
-        <aside className="sidebar left">
-          <div className="stack">
-            <ControlPanel
-              scenarioId={scenarioId}
-              year={displayYear}
-              seaLevelM={seaLevelM}
-              warmingC={warmingC}
-              playing={playing}
-              onScenario={setScenarioId}
-              onYear={setYear}
-              onTogglePlay={togglePlay}
-            />
-            <IcePanel ice={ice} year={displayYear} warmingC={warmingC} />
-            <RiverPanel
-              warmingC={warmingC}
-              year={displayYear}
-              selectedRiverId={selectedRiverId}
-              onSelectRiver={selectRiver}
-            />
+        {isMobile ? (
+          /* Phones get one panel at a time behind the bottom bar. Stacking all
+             of them produced a 4.4-screen scroll that buried the controls. */
+          <div className="deck">
+            {/* key remounts the panel so it animates in on every tab change */}
+            <div
+              className="deck-body"
+              key={panelTab}
+              id={`panel-${panelTab}`}
+              role="tabpanel"
+              aria-labelledby={`tab-${panelTab}`}
+              tabIndex={-1}
+            >
+              {panels[panelTab]}
+            </div>
           </div>
-        </aside>
-
-        <aside className="sidebar right">
-          <StatsPanel
-            seaLevelM={seaLevelM}
-            warmingC={warmingC}
-            mapMode={mapMode}
-            onMapMode={setMapMode}
-            selected={selected}
-            onSelectId={(id) => {
-              if (!id) {
-                setSelected(null)
-                return
-              }
-              setSelected(getById(id) ?? null)
-            }}
-          />
-        </aside>
+        ) : (
+          <>
+            <aside className="sidebar left">
+              <div className="stack">
+                {panels.pathway}
+                {panels.ice}
+                {panels.rivers}
+              </div>
+            </aside>
+            <aside className="sidebar right">
+              <div className="stack">
+                {panels.countries}
+                {panels.learn}
+              </div>
+            </aside>
+          </>
+        )}
       </main>
+
+      {isMobile && (
+        <nav className="tabbar" role="tablist" aria-label="Panels">
+          {PANEL_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              /* Only the active panel is mounted, so pointing the other tabs
+                 at absent element ids would be a dangling ARIA reference. */
+              aria-controls={
+                panelTab === t.id ? `panel-${t.id}` : undefined
+              }
+              aria-selected={panelTab === t.id}
+              className={panelTab === t.id ? 'tabbar-btn active' : 'tabbar-btn'}
+              onClick={() => setPanelTab(t.id)}
+            >
+              <TabIcon id={t.id} />
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }
