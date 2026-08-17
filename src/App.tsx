@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { ControlPanel } from './components/ControlPanel'
 import type { MapMode } from './components/EarthGlobe'
 import { IcePanel } from './components/IcePanel'
+import { RiverPanel } from './components/RiverPanel'
 import { StatsPanel } from './components/StatsPanel'
 import {
   SCENARIOS,
@@ -33,6 +34,7 @@ function AppShell() {
   )
   const [selected, setSelected] = useState<CountryFeature | null>(null)
   const [mapMode, setMapMode] = useState<MapMode>('temp')
+  const [selectedRiverId, setSelectedRiverId] = useState<string | null>(null)
 
   const scenario = SCENARIOS[scenarioId]
   const seaLevelM = useMemo(
@@ -46,16 +48,24 @@ function AppShell() {
   const ice = useMemo(() => iceState(scenario, year), [scenario, year])
   const displayYear = Math.round(year)
 
+  // Rivers are only drawn on the globe in the rain view, so picking one from
+  // the panel switches the map there — otherwise the camera flies to a basin
+  // the user cannot actually see.
+  const selectRiver = (id: string | null) => {
+    setSelectedRiverId(id)
+    if (id) setMapMode('rain')
+  }
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">Meridian</span>
-          <span className="brand-sub">Sea level, ice & borders</span>
+          <span className="brand-sub">Sea level, ice, water & borders</span>
         </div>
         <p className="lede">
           Pick a warming pathway and press play to watch seas rise, ice retreat,
-          and every country warm through 2300.
+          rivers run dry, and every country warm through 2300.
         </p>
       </header>
 
@@ -75,6 +85,8 @@ function AppShell() {
               playing={playing}
               selectedId={selected?.properties.id ?? null}
               onSelect={setSelected}
+              selectedRiverId={selectedRiverId}
+              onSelectRiver={selectRiver}
             />
           </Suspense>
           <div className="stage-caption">
@@ -102,6 +114,12 @@ function AppShell() {
               onTogglePlay={togglePlay}
             />
             <IcePanel ice={ice} year={displayYear} warmingC={warmingC} />
+            <RiverPanel
+              warmingC={warmingC}
+              year={displayYear}
+              selectedRiverId={selectedRiverId}
+              onSelectRiver={selectRiver}
+            />
           </div>
         </aside>
 

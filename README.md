@@ -58,6 +58,28 @@ Each pathway shows a **What it takes** list in the UI. Year range: **2020–2300
 
 Polar ice is shown as **bars** (Arctic summer sea ice, Greenland, Antarctica). Arctic summer ice is near-linear with warming (no classical tip). Ice sheets can tip into multi-century–millennial committed loss.
 
+## Water: rain & rivers
+
+The **Rain** map shows each country's projected change in annual precipitation
+(baseline from World Bank climatology where available). Seventeen major river
+basins are drawn on the globe in that view, coloured blue where flow rises and
+rust where it falls, and listed in the **Rivers & freshwater** panel with
+today's discharge → projected discharge.
+
+River flow is modelled from three competing mechanisms:
+
+- **Glacier melt — "peak water".** Retreating glaciers *release* stored ice, so
+  flow rises first, peaks, then collapses once the ice is gone. The Indus and
+  Amu Darya are the clearest cases.
+- **Snowpack.** Snow turning to rain mostly shifts *timing*, but in warm basins
+  earlier melt plus a longer growing season evaporate a real share of the
+  annual volume (the Colorado loses roughly 9% of its flow per °C). Cold
+  high-latitude basins keep nearly all of it — which is why Arctic rivers like
+  the Lena gain water, matching observations.
+- **Rain and evaporation.** Basin rainfall shifts (wet-get-wetter,
+  dry-get-drier) while hotter air evaporates more before it reaches the
+  channel, so a basin can get the same rain and still lose river flow.
+
 ## Deploy on Railway
 
 The repo ships a multi-stage `Dockerfile` and `railway.json`, so Railway builds

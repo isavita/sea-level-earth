@@ -13,6 +13,12 @@ import {
   RAIN_LEGEND,
 } from '../lib/rain'
 import { useIsMobile } from '../lib/useIsMobile'
+import {
+  allRiverStates,
+  riverFlowColor,
+  RIVERS,
+  type RiverState,
+} from '../data/rivers'
 
 export type MapMode = 'temp' | 'loss' | 'rain'
 
@@ -24,6 +30,17 @@ interface EarthGlobeProps {
   playing: boolean
   selectedId: string | null
   onSelect: (feature: CountryFeature | null) => void
+  selectedRiverId: string | null
+  onSelectRiver: (id: string | null) => void
+}
+
+interface RiverPath {
+  id: string
+  name: string
+  /** [lat, lng] pairs — react-globe.gl reads points in that order. */
+  coords: [number, number][]
+  color: string
+  deltaFrac: number
 }
 
 interface MapLabel {
@@ -82,6 +99,8 @@ export function EarthGlobe({
   playing,
   selectedId,
   onSelect,
+  selectedRiverId,
+  onSelectRiver,
 }: EarthGlobeProps) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -157,6 +176,21 @@ export function EarthGlobe({
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
+
+  // Fly to a river basin when one is picked in the freshwater panel.
+  useEffect(() => {
+    const g = globeRef.current
+    if (!g || !selectedRiverId) return
+    const river = RIVERS.find((r) => r.id === selectedRiverId)
+    if (!river) return
+    const mid = river.path[Math.floor(river.path.length / 2)]
+    g.controls().autoRotate = false
+    g.pointOfView(
+      { lat: mid[1], lng: mid[0], altitude: isMobile ? 1.9 : 1.7 },
+      900,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRiverId])
 
   // Centroids + areas never change with the scenario — compute them once so
   // the per-frame animation work stays cheap.
@@ -284,6 +318,19 @@ export function EarthGlobe({
     labelBudget,
   ])
 
+  // Rivers ride along with the rain map — 17 short polylines, negligible next
+  // to ~180 country polygons, so they stay on even while the timeline plays.
+  const riverPaths = useMemo((): RiverPath[] => {
+    if (mapMode !== 'rain') return []
+    return allRiverStates(warmingC).map((s: RiverState) => ({
+      id: s.river.id,
+      name: s.river.name,
+      coords: s.river.path.map(([lng, lat]) => [lat, lng] as [number, number]),
+      color: riverFlowColor(s.deltaFrac),
+      deltaFrac: s.deltaFrac,
+    }))
+  }, [mapMode, warmingC])
+
   return (
     <div ref={containerRef} className="globe-stage">
       {loading || features.length === 0 ? (
@@ -329,6 +376,20 @@ export function EarthGlobe({
           }}
           onPolygonClick={(d: object) => {
             onSelect(d as CountryFeature)
+          }}
+          pathsData={riverPaths}
+          pathPoints="coords"
+          pathPointLat={(p: unknown) => (p as [number, number])[0]}
+          pathPointLng={(p: unknown) => (p as [number, number])[1]}
+          pathColor={(d: object) => (d as RiverPath).color}
+          pathStroke={(d: object) =>
+            (d as RiverPath).id === selectedRiverId ? 2.4 : 1.2
+          }
+          pathPointAlt={0.012}
+          pathTransitionDuration={0}
+          onPathClick={(d: object) => {
+            const p = d as RiverPath
+            onSelectRiver(p.id === selectedRiverId ? null : p.id)
           }}
           labelsData={mapLabels}
           labelLat="lat"
@@ -405,7 +466,8 @@ export function EarthGlobe({
               ))}
             </div>
             <span className="temp-legend-note">
-              Labels = Δ rain % (hover for mm/yr)
+              Labels = Δ rain % (hover for mm/yr). Lines are major rivers,
+              blue = more flow, rust = less.
             </span>
           </>
         ) : (

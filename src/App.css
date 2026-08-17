@@ -716,6 +716,158 @@ input[type='range'] {
 .risk-high { color: var(--accent); }
 .risk-extreme { color: var(--danger); }
 
+/* --- Rivers & freshwater --- */
+
+.peak-water-flag {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  padding: 0.6rem 0.7rem;
+}
+
+.river-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.river-row {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.river-row:hover {
+  border-color: var(--teal);
+}
+
+.river-row.active {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 8%, white);
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+.river-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.river-name {
+  font-weight: 650;
+  font-size: 0.88rem;
+}
+
+.river-delta {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.river-delta.rising { color: var(--teal); }
+.river-delta.stable { color: var(--muted); }
+.river-delta.declining { color: var(--accent); }
+.river-delta.severe { color: var(--danger); }
+
+.river-track {
+  position: relative;
+  display: block;
+  height: 0.45rem;
+  background: #e2e9e5;
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+/* Tick marking today's flow, at the 60% anchor used by the fill width. */
+.river-today {
+  position: absolute;
+  left: 60%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--muted);
+  opacity: 0.55;
+  z-index: 1;
+}
+
+.river-fill {
+  display: block;
+  height: 100%;
+  transition: width 0.25s ease;
+}
+
+.river-fill.rising { background: #4cbae8; }
+.river-fill.stable { background: #8fa8a2; }
+.river-fill.declining { background: var(--accent); }
+.river-fill.severe { background: var(--danger); }
+
+.river-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.river-pill {
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.river-pill.rising { background: #dff1f9; color: #1d6a86; }
+.river-pill.stable { background: #eaefec; color: var(--muted); }
+.river-pill.declining { background: #f7e4d8; color: #8f4418; }
+.river-pill.severe { background: #f4dcd4; color: var(--danger); }
+
+.river-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 0.4rem;
+  margin-top: 0.1rem;
+}
+
+.river-region {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.river-driver {
+  color: var(--ink);
+}
+
+.river-people {
+  font-size: 0.68rem;
+}
+
+.river-more {
+  align-self: flex-start;
+}
+
 .ice-details {
   font-size: 0.78rem;
   color: var(--muted);
