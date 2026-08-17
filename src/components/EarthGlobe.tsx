@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import { geoCentroid } from 'd3-geo'
 import { fractionLostAtRise } from '../lib/landLoss'
@@ -50,8 +50,25 @@ interface MapLabel {
   lng: number
   text: string
   areaKm2: number
-  /** Used for contrast: higher = darker fill → lighter text */
-  weight: number
+  /**
+   * Contrast decision, resolved to a boolean here rather than kept as the raw
+   * metric. A continuous value would differ on literally every timeline commit
+   * and so defeat the identity reuse in `mapLabels`.
+   */
+  light: boolean
+}
+
+/** True when the fill is dark enough to need light text. */
+const isLightText = (weight: number) => weight >= 2.8
+
+function sameLabel(a: MapLabel, b: MapLabel): boolean {
+  return (
+    a.text === b.text &&
+    a.light === b.light &&
+    a.lat === b.lat &&
+    a.lng === b.lng &&
+    a.areaKm2 === b.areaKm2
+  )
 }
 
 interface GeoMeta {
@@ -60,16 +77,23 @@ interface GeoMeta {
   areaKm2: number
 }
 
-function formatLossLabel(frac: number, areaLostKm2: number, detailed: boolean): string {
+function formatLossLabel(
+  frac: number,
+  areaLostKm2: number,
+  detailed: boolean,
+  coarse: boolean,
+): string {
   const pct = frac * 100
   const pctText =
     pct <= 0
       ? '0%'
-      : pct < 0.1
-        ? '<0.1%'
-        : pct < 10
-          ? `${pct.toFixed(1)}%`
-          : `${pct.toFixed(0)}%`
+      : coarse
+        ? `${pct.toFixed(0)}%`
+        : pct < 0.1
+          ? '<0.1%'
+          : pct < 10
+            ? `${pct.toFixed(1)}%`
+            : `${pct.toFixed(0)}%`
 
   if (!detailed) return pctText
 
@@ -91,6 +115,15 @@ const LOSS_LEGEND = [
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/* Constant accessors, hoisted to module scope. Inline arrows get a fresh
+   identity on every React render, which makes globe.gl re-run them across all
+   ~241 polygons and re-set their materials on every timeline commit — for
+   values that never change. */
+const TRANSPARENT_SIDE = () => 'rgba(0,0,0,0)'
+const POLYGON_STROKE = () => 'rgba(22, 32, 30, 0.5)'
+const PATH_POINT_LAT = (p: unknown) => (p as [number, number])[0]
+const PATH_POINT_LNG = (p: unknown) => (p as [number, number])[1]
 
 export function EarthGlobe({
   seaLevelM,
@@ -243,12 +276,36 @@ export function EarthGlobe({
     return m
   }, [features, seaLevelM, warmingC])
 
-  // How many numeric labels to draw. Labels are 3D text whose geometry is
-  // rebuilt whenever their text changes — costly *per frame* while animating,
-  // but nearly free when the globe is paused (built once). So we drop them on
-  // mobile only while playing, and otherwise show the full set on every device
-  // (react-globe.gl hides the back-facing half, and you can pinch to zoom in).
-  const labelBudget = playing ? (isMobile ? 0 : 70) : 150
+  /**
+   * How many numeric labels to draw. Each is extruded 3D text whose geometry
+   * three-globe rebuilds on every update, so cost is essentially linear in the
+   * count: measured over a play-through, 70 labels cost ~9.4 ms per simulated
+   * year with 340 ms stalls, against ~1.4 ms and 59 ms with none. Paused, the
+   * set is built once and costs nothing, so the full 150 come back.
+   *
+   * 24 keeps the largest countries counting up — the ones whose labels are
+   * legible at play-through zoom anyway — for roughly a third of the cost.
+   */
+  const labelBudget = playing ? (isMobile ? 0 : 24) : 150
+
+  /**
+   * Label geometry dominates the frame budget: measured over a play-through,
+   * 70 labels cost ~9.4 ms per simulated year against ~1.4 ms with labels off,
+   * and produced 340 ms digests. three-globe rebuilds every label's extruded
+   * text geometry on each digest regardless of datum identity, so the only
+   * real lever is *not running the digest*. It runs whenever `labelsData`
+   * changes identity — hence the array-level reuse below.
+   */
+  const labelCacheRef = useRef(new Map<string, MapLabel>())
+  const prevLabelsRef = useRef<MapLabel[]>([])
+
+  /**
+   * While the timeline plays, round the numbers harder. Fewer distinct strings
+   * means the label set is genuinely unchanged across most commits, which is
+   * what lets the array reuse below skip the digest entirely. Paused, where a
+   * rebuild is a one-off, full precision comes back.
+   */
+  const coarse = playing
 
   const mapLabels = useMemo((): MapLabel[] => {
     const labels: MapLabel[] = []
@@ -266,14 +323,16 @@ export function EarthGlobe({
           name: f.properties.name,
           lat: meta.lat,
           lng: meta.lng,
-          text: `+${absoluteC.toFixed(1)}°`,
+          text: `+${absoluteC.toFixed(coarse ? 0 : 1)}°`,
           areaKm2: meta.areaKm2,
-          weight: absoluteC,
+          light: isLightText(absoluteC),
         })
       } else if (mapMode === 'rain') {
         const deltaFrac = metrics?.deltaFrac ?? 0
         const futureMm = metrics?.futureMm ?? 0
-        const pct = formatDeltaFrac(deltaFrac)
+        const pct = coarse
+          ? `${deltaFrac >= 0 ? '+' : ''}${(deltaFrac * 100).toFixed(0)}%`
+          : formatDeltaFrac(deltaFrac)
         labels.push({
           id: f.properties.id,
           name: f.properties.name,
@@ -281,7 +340,9 @@ export function EarthGlobe({
           lng: meta.lng,
           text: detailed ? `${pct} · ${futureMm.toFixed(0)} mm` : pct,
           areaKm2: meta.areaKm2,
-          weight: Math.abs(deltaFrac) * 20 + (deltaFrac < 0 ? 1 : 0),
+          light: isLightText(
+            Math.abs(deltaFrac) * 20 + (deltaFrac < 0 ? 1 : 0),
+          ),
         })
       } else {
         const frac = metrics?.frac ?? 0
@@ -291,9 +352,9 @@ export function EarthGlobe({
           name: f.properties.name,
           lat: meta.lat,
           lng: meta.lng,
-          text: formatLossLabel(frac, areaLostKm2, detailed),
+          text: formatLossLabel(frac, areaLostKm2, detailed, coarse),
           areaKm2: meta.areaKm2,
-          weight: frac * 20,
+          light: isLightText(frac * 20),
         })
       }
     }
@@ -307,7 +368,35 @@ export function EarthGlobe({
       const f = features.find((x) => x.properties.id === id)
       if (f) pushLabel(f)
     }
-    return labels
+
+    // Reuse the previous object wherever nothing visible changed…
+    const cache = labelCacheRef.current
+    const seen = new Set<string>()
+    const reconciled = labels.map((l) => {
+      seen.add(l.id)
+      const prev = cache.get(l.id)
+      if (prev && sameLabel(prev, l)) return prev
+      cache.set(l.id, l)
+      return l
+    })
+    // Labels that dropped out of budget would otherwise leak entries forever.
+    for (const id of cache.keys()) {
+      if (!seen.has(id)) cache.delete(id)
+    }
+
+    // …and if *every* label was reused, hand back the very same array. That
+    // keeps the `labelsData` prop identical, so globe.gl skips the labels
+    // digest — the whole point. A fresh array of identical objects would still
+    // rebuild all 70 text geometries.
+    const prev = prevLabelsRef.current
+    if (
+      prev.length === reconciled.length &&
+      reconciled.every((l, i) => l === prev[i])
+    ) {
+      return prev
+    }
+    prevLabelsRef.current = reconciled
+    return reconciled
   }, [
     labelOrder,
     features,
@@ -318,7 +407,57 @@ export function EarthGlobe({
     selectedId,
     hoverId,
     labelBudget,
+    coarse,
   ])
+
+  /* Label accessors, memoised on what they actually read. Inline arrows get a
+     new identity on every timeline commit, which re-dirties the labels layer
+     and undoes the array reuse above. None of these depend on the year. */
+  const labelSizeAccessor = useCallback(
+    (d: object) => {
+      const label = d as MapLabel
+      if (label.id === selectedId) return isMobile ? 0.92 : 0.72
+      if (label.id === hoverId) return isMobile ? 0.82 : 0.62
+      const a = Math.max(8_000, label.areaKm2)
+      // Bigger floor on phones so small countries stay legible.
+      const base = Math.sqrt(a) * (isMobile ? 0.00045 : 0.0003)
+      return isMobile
+        ? Math.min(0.78, Math.max(0.46, base))
+        : Math.min(0.55, Math.max(0.28, base))
+    },
+    [selectedId, hoverId, isMobile],
+  )
+
+  const labelColorAccessor = useCallback(
+    (d: object) => {
+      const label = d as MapLabel
+      if (label.id === selectedId || label.id === hoverId) return '#fffdf6'
+      // Prefer high-contrast light labels; dark only on very pale fills
+      return label.light ? '#fff8ef' : '#1a1612'
+    },
+    [selectedId, hoverId],
+  )
+
+  const handleLabelClick = useCallback(
+    (d: object) => {
+      const label = d as MapLabel
+      const f = features.find((x) => x.properties.id === label.id)
+      if (f) onSelect(f)
+    },
+    [features, onSelect],
+  )
+
+  const handleLabelHover = useCallback(
+    (d: object | null) => {
+      const label = d as MapLabel | null
+      setHoverId(label?.id ?? null)
+      const controls = globeRef.current?.controls()
+      if (controls && !prefersReducedMotion()) {
+        controls.autoRotate = !label && !selectedId
+      }
+    },
+    [selectedId],
+  )
 
   // Rivers ride along with the rain map — 17 short polylines, negligible next
   // to ~180 country polygons, so they stay on even while the timeline plays.
@@ -364,8 +503,8 @@ export function EarthGlobe({
             }
             return lossColor(metrics?.frac ?? 0, hovered)
           }}
-          polygonSideColor={() => 'rgba(0,0,0,0)'}
-          polygonStrokeColor={() => 'rgba(22, 32, 30, 0.5)'}
+          polygonSideColor={TRANSPARENT_SIDE}
+          polygonStrokeColor={POLYGON_STROKE}
           polygonAltitude={0.006}
           polygonsTransitionDuration={0}
           onPolygonHover={(d: object | null) => {
@@ -381,8 +520,8 @@ export function EarthGlobe({
           }}
           pathsData={riverPaths}
           pathPoints="coords"
-          pathPointLat={(p: unknown) => (p as [number, number])[0]}
-          pathPointLng={(p: unknown) => (p as [number, number])[1]}
+          pathPointLat={PATH_POINT_LAT}
+          pathPointLng={PATH_POINT_LNG}
           pathColor={(d: object) => (d as RiverPath).color}
           pathStroke={(d: object) =>
             (d as RiverPath).id === selectedRiverId ? 2.4 : 1.2
@@ -401,38 +540,10 @@ export function EarthGlobe({
           labelIncludeDot={false}
           labelResolution={2}
           labelsTransitionDuration={0}
-          labelSize={(d: object) => {
-            const label = d as MapLabel
-            if (label.id === selectedId) return isMobile ? 0.92 : 0.72
-            if (label.id === hoverId) return isMobile ? 0.82 : 0.62
-            const a = Math.max(8_000, label.areaKm2)
-            // Bigger floor on phones so small countries stay legible.
-            const base = Math.sqrt(a) * (isMobile ? 0.00045 : 0.0003)
-            return isMobile
-              ? Math.min(0.78, Math.max(0.46, base))
-              : Math.min(0.55, Math.max(0.28, base))
-          }}
-          labelColor={(d: object) => {
-            const label = d as MapLabel
-            if (label.id === selectedId || label.id === hoverId) {
-              return '#fffdf6'
-            }
-            // Prefer high-contrast light labels; dark only on very pale fills
-            return label.weight >= 2.8 ? '#fff8ef' : '#1a1612'
-          }}
-          onLabelClick={(d: object) => {
-            const label = d as MapLabel
-            const f = features.find((x) => x.properties.id === label.id)
-            if (f) onSelect(f)
-          }}
-          onLabelHover={(d: object | null) => {
-            const label = d as MapLabel | null
-            setHoverId(label?.id ?? null)
-            const controls = globeRef.current?.controls()
-            if (controls && !prefersReducedMotion()) {
-              controls.autoRotate = !label && !selectedId
-            }
-          }}
+          labelSize={labelSizeAccessor}
+          labelColor={labelColorAccessor}
+          onLabelClick={handleLabelClick}
+          onLabelHover={handleLabelHover}
           rendererConfig={{
             antialias: !isMobile,
             alpha: false,
