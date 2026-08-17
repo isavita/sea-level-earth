@@ -12,6 +12,11 @@ interface ControlPanelProps {
   seaLevelM: number
   warmingC: number
   playing: boolean
+  /**
+   * Phones render the transport in the sheet header instead, so this panel
+   * omits its own. Two year sliders would mean a duplicate `year-slider` id.
+   */
+  showTimeline?: boolean
   onScenario: (id: ScenarioId) => void
   onYear: (year: number) => void
   onTogglePlay: () => void
@@ -28,12 +33,14 @@ export function ControlPanel({
   seaLevelM,
   warmingC,
   playing,
+  showTimeline = true,
   onScenario,
   onYear,
   onTogglePlay,
 }: ControlPanelProps) {
   const scenario = SCENARIOS[scenarioId]
   const atEnd = year >= YEAR_MAX
+  const yearPct = ((year - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100
 
   return (
     <section className="panel controls">
@@ -75,6 +82,7 @@ export function ControlPanel({
 
       {/* Controls come before the reading material: on a phone the play button
           used to sit below two long bullet lists. */}
+      {showTimeline && (
       <div className="year-block">
         <div className="year-row">
           <button
@@ -106,6 +114,8 @@ export function ControlPanel({
           step={5}
           value={year}
           onChange={(e) => onYear(Number(e.target.value))}
+          /* Drives the filled portion of the custom track. */
+          style={{ ['--pct' as string]: `${yearPct}%` }}
         />
         <div className="year-ticks">
           <span>{YEAR_MIN}</span>
@@ -114,6 +124,7 @@ export function ControlPanel({
           <span>{YEAR_MAX}</span>
         </div>
       </div>
+      )}
 
       <dl className="metrics">
         <div>

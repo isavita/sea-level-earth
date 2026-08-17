@@ -4,6 +4,7 @@ import type { MapMode } from './components/EarthGlobe'
 import { IcePanel } from './components/IcePanel'
 import { LearnPanel } from './components/LearnPanel'
 import { RiverPanel } from './components/RiverPanel'
+import { Scrubber } from './components/Scrubber'
 import { StatsPanel } from './components/StatsPanel'
 import {
   SCENARIOS,
@@ -111,6 +112,7 @@ function AppShell() {
         seaLevelM={seaLevelM}
         warmingC={warmingC}
         playing={playing}
+        showTimeline={!isMobile}
         onScenario={setScenarioId}
         onYear={setYear}
         onTogglePlay={togglePlay}
@@ -148,7 +150,8 @@ function AppShell() {
   // the panel switches the map there — otherwise the camera flies to a basin
   // the user cannot actually see.
   return (
-    <div className="app">
+    /* --sc carries the pathway colour to the slider, sheet and live dot. */
+    <div className="app" style={{ ['--sc' as string]: scenario.color }}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">Meridian</span>
@@ -158,6 +161,12 @@ function AppShell() {
           Pick a warming pathway and press play to watch seas rise, ice retreat,
           rivers run dry, and every country warm through 2300.
         </p>
+        {/* Phone app-bar readout — the masthead's copy is hidden at that size. */}
+        <div className={`live-chip${playing ? ' is-playing' : ''}`}>
+          <span className="live-dot" aria-hidden />
+          <b>{displayYear}</b>
+          <span>+{warmingC.toFixed(1)}°C</span>
+        </div>
       </header>
 
       <main className="layout">
@@ -180,15 +189,25 @@ function AppShell() {
               onSelectRiver={selectRiver}
             />
           </Suspense>
+          {/* Split into spans so the phone can drop the parts the app-bar chip
+              already shows, and still fit on one line over the globe. */}
           <div className="stage-caption">
             <span className="swatch" style={{ background: scenario.color }} />
-            {scenario.shortLabel} · {displayYear} · +{seaLevelM.toFixed(2)} m · +
-            {warmingC.toFixed(1)}°C global · map{' '}
-            {mapMode === 'temp'
-              ? 'temperature'
-              : mapMode === 'rain'
-                ? 'rain'
-                : 'land loss'}
+            <span className="cap-strong">{scenario.shortLabel}</span>
+            <span className="cap-sep cap-dup">·</span>
+            <span className="cap-dup">{displayYear}</span>
+            <span className="cap-sep">·</span>
+            <span className="cap-strong">+{seaLevelM.toFixed(2)} m</span>
+            <span className="cap-sep cap-dup">·</span>
+            <span className="cap-dup">+{warmingC.toFixed(1)}°C</span>
+            <span className="cap-sep">·</span>
+            <span>
+              {mapMode === 'temp'
+                ? 'temperature'
+                : mapMode === 'rain'
+                  ? 'rain'
+                  : 'land loss'}
+            </span>
           </div>
         </div>
 
@@ -196,6 +215,15 @@ function AppShell() {
           /* Phones get one panel at a time behind the bottom bar. Stacking all
              of them produced a 4.4-screen scroll that buried the controls. */
           <div className="deck">
+            <div className="deck-grip" aria-hidden />
+            <Scrubber
+              year={displayYear}
+              playing={playing}
+              seaLevelM={seaLevelM}
+              warmingC={warmingC}
+              onYear={setYear}
+              onTogglePlay={togglePlay}
+            />
             {/* key remounts the panel so it animates in on every tab change */}
             <div
               className="deck-body"

@@ -1,21 +1,59 @@
+/* ==========================================================================
+   Meridian — dark "ocean night" design system.
+
+   The globe renders on #07161c, so the shell is dark too: on a light page the
+   canvas read as a black rectangle pasted onto paper. Surfaces are translucent
+   white over a near-black base, which keeps every panel feeling like glass lit
+   by the globe rather than a flat card.
+   ========================================================================== */
+
 :root {
-  --ink: #1a2422;
-  --muted: #5c6b66;
-  --paper: #e8eee9;
-  --panel: #f4f7f5;
-  --line: #c5d0ca;
-  --accent: #c45c26;
-  --teal: #2a6f7a;
-  --danger: #a63d1b;
-  --stage: #0f2a32;
+  /* Base ---------------------------------------------------------------- */
+  --bg-0: #060d11;
+  --bg-1: #0b141a;
+  --bg-2: #101d24;
+  --stage: #07161c;
+
+  /* Translucent surfaces stack over the base without new opaque colours. */
+  --surface: rgba(160, 200, 210, 0.055);
+  --surface-hi: rgba(160, 200, 210, 0.1);
+  --surface-max: rgba(160, 200, 210, 0.15);
+  --line: rgba(150, 190, 200, 0.16);
+  --line-hi: rgba(150, 190, 200, 0.32);
+
+  /* Ink ----------------------------------------------------------------- */
+  --ink: #e8f2f3;
+  --muted: #8ea6ab;
+  --dim: #6c8388;
+
+  /* Accents — brightened from the print palette so they carry on black. */
+  --teal: #46c8c2;
+  --accent: #ff9155;
+  --danger: #ff6f5c;
+  --good: #4fd193;
+
   --font-display: 'Syne', sans-serif;
   --font-body: 'Figtree', sans-serif;
+
+  /* Elevation: one soft ambient + one tight contact shadow. */
+  --lift-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 24px -18px rgba(0, 0, 0, 0.9);
+  --lift-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 18px 40px -24px rgba(0, 0, 0, 0.95);
+
+  --r-sm: 0.55rem;
+  --r-md: 0.85rem;
+  --r-lg: 1.15rem;
+  --r-xl: 1.5rem;
+
   color: var(--ink);
-  background: var(--paper);
+  background: var(--bg-0);
   font-family: var(--font-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  /* Makes native form controls (range, search, scrollbars) render dark. */
+  color-scheme: dark;
 }
 
 * {
@@ -32,13 +70,32 @@ body,
 
 body {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, #d5e4df 0%, transparent 55%),
-    linear-gradient(165deg, #dce6e1 0%, #e8eee9 40%, #d2ddd8 100%);
+    radial-gradient(
+      ellipse 90% 55% at 50% -8%,
+      rgba(52, 128, 140, 0.28) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 88% 8%,
+      rgba(255, 145, 85, 0.08) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, #081217 0%, var(--bg-0) 45%, #04090c 100%);
+  background-attachment: fixed;
+  /* Kills iOS rubber-banding, which otherwise exposes white behind the app. */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
 input {
   font: inherit;
+}
+
+:where(button, a, input, summary):focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
 }
 
 .app {
@@ -48,6 +105,8 @@ input {
   padding: 1.25rem 1.5rem 1.5rem;
   gap: 1rem;
 }
+
+/* --- Masthead ------------------------------------------------------------ */
 
 .topbar {
   display: flex;
@@ -69,6 +128,10 @@ input {
   font-size: clamp(2rem, 4vw, 2.75rem);
   letter-spacing: -0.03em;
   line-height: 1;
+  background: linear-gradient(100deg, #ffffff 10%, #8fd8d4 60%, #4fa8b8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .brand-sub {
@@ -85,6 +148,49 @@ input {
   font-size: 1rem;
   line-height: 1.45;
 }
+
+/* Live readout that tracks the timeline — the app's "now" indicator. */
+.live-chip {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.32rem 0.6rem 0.32rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.live-chip b {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--sc, var(--teal));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc, var(--teal)) 22%, transparent);
+  flex: none;
+}
+
+.live-chip.is-playing .live-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  50% {
+    box-shadow: 0 0 0 6px
+      color-mix(in srgb, var(--sc, var(--teal)) 6%, transparent);
+  }
+}
+
+/* --- Layout -------------------------------------------------------------- */
 
 .layout {
   flex: 1;
@@ -115,6 +221,7 @@ input {
   width: 100%;
   min-height: 0;
   overflow: auto;
+  scrollbar-width: thin;
 }
 
 .stack .panel {
@@ -122,15 +229,20 @@ input {
 }
 
 .panel {
-  background: var(--panel);
+  background: linear-gradient(
+    180deg,
+    rgba(160, 200, 210, 0.075) 0%,
+    rgba(160, 200, 210, 0.03) 100%
+  );
   border: 1px solid var(--line);
-  border-radius: 2px;
-  padding: 1.1rem 1.15rem 1.2rem;
+  border-radius: var(--r-lg);
+  padding: 1.05rem 1.05rem 1.15rem;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
   overflow: auto;
+  box-shadow: var(--lift-1);
 }
 
 .panel-head {
@@ -141,24 +253,28 @@ input {
 
 .eyebrow {
   margin: 0;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--teal);
+  opacity: 0.85;
+  font-weight: 600;
 }
 
 .panel-head h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
+/* --- Scenario picker ----------------------------------------------------- */
+
 .scenario-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .scenario-switch.multi {
@@ -170,7 +286,7 @@ input {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  padding: 0.55rem 0.65rem;
+  padding: 0.6rem 0.7rem;
 }
 
 .scenario-switch.multi .scenario-warm {
@@ -179,31 +295,64 @@ input {
 
 .scenario {
   appearance: none;
+  position: relative;
   border: 1px solid var(--line);
-  background: #fff;
-  padding: 0.7rem 0.65rem;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.7rem;
   text-align: left;
   cursor: pointer;
+  color: var(--ink);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  transition: border-color 0.15s, background 0.15s;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.18s, background 0.18s, transform 0.08s;
+}
+
+.scenario:active {
+  transform: scale(0.985);
 }
 
 .scenario.active {
-  border-color: var(--sc, var(--teal));
-  background: color-mix(in srgb, var(--sc, var(--teal)) 12%, white);
-  box-shadow: inset 3px 0 0 var(--sc, var(--teal));
+  border-color: color-mix(in srgb, var(--sc, var(--teal)) 55%, transparent);
+  background: color-mix(in srgb, var(--sc, var(--teal)) 16%, var(--surface));
+  box-shadow: 0 0 0 1px
+      color-mix(in srgb, var(--sc, var(--teal)) 30%, transparent),
+    0 8px 22px -16px var(--sc, var(--teal));
+}
+
+/* Faint colour wash so the active pathway reads even in peripheral vision. */
+.scenario.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 100% at 0% 0%,
+    color-mix(in srgb, var(--sc, var(--teal)) 22%, transparent) 0%,
+    transparent 70%
+  );
 }
 
 .scenario-label {
   font-weight: 650;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
+  position: relative;
+  z-index: 1;
 }
 
 .scenario-warm {
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
+}
+
+.scenario.active .scenario-warm {
+  color: var(--ink-dim, #c6d7da);
 }
 
 /* Small bar so pathways can be compared at a glance, not just read.
@@ -213,11 +362,13 @@ input {
   display: block;
   width: 100%;
   align-self: stretch;
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
   height: 3px;
-  background: #dde5e0;
-  border-radius: 2px;
+  background: rgba(160, 200, 210, 0.14);
+  border-radius: 999px;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 /* Row-mode chips only: flex-basis is measured along the main axis, so 100%
@@ -231,26 +382,30 @@ input {
 .scenario-bar i {
   display: block;
   height: 100%;
+  border-radius: 999px;
   background: var(--sc, var(--teal));
-  opacity: 0.55;
+  opacity: 0.5;
+  transition: width 0.3s ease;
 }
 
 .scenario.active .scenario-bar i {
   opacity: 1;
+  box-shadow: 0 0 8px -1px var(--sc, var(--teal));
 }
 
 .scenario-desc {
   margin: 0;
-  font-size: 0.86rem;
-  line-height: 1.45;
+  font-size: 0.85rem;
+  line-height: 1.5;
   color: var(--muted);
 }
 
 .scenario-detail {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-left: 3px solid var(--sc, var(--teal));
-  padding: 0.7rem 0.8rem 0.75rem;
+  border-radius: var(--r-md);
+  padding: 0.75rem 0.85rem 0.8rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -272,51 +427,109 @@ input {
 }
 
 .plausibility {
-  font-size: 0.65rem;
-  font-weight: 650;
-  letter-spacing: 0.03em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.15rem 0.45rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 999px;
   white-space: nowrap;
+  border: 1px solid transparent;
 }
 
-.plausibility.reference { background: #e8ece9; color: #5a6b66; }
-.plausibility.good { background: #dcefe5; color: #256b4f; }
-.plausibility.likely { background: #dcebef; color: #1f5f6b; }
-.plausibility.high { background: #f7e4d8; color: #8f4418; }
-.plausibility.extreme { background: #f3d9d4; color: #8c2418; }
+.plausibility.reference {
+  background: rgba(160, 200, 210, 0.12);
+  color: #a9c0c4;
+  border-color: rgba(160, 200, 210, 0.2);
+}
+.plausibility.good {
+  background: rgba(79, 209, 147, 0.14);
+  color: #67dda6;
+  border-color: rgba(79, 209, 147, 0.3);
+}
+.plausibility.likely {
+  background: rgba(70, 200, 194, 0.14);
+  color: #5fd6d0;
+  border-color: rgba(70, 200, 194, 0.3);
+}
+.plausibility.high {
+  background: rgba(255, 145, 85, 0.14);
+  color: #ffa871;
+  border-color: rgba(255, 145, 85, 0.32);
+}
+.plausibility.extreme {
+  background: rgba(255, 111, 92, 0.16);
+  color: #ff8877;
+  border-color: rgba(255, 111, 92, 0.36);
+}
 
 .scenario-details {
   font-size: 0.8rem;
   color: var(--muted);
 }
 
-.scenario-details summary {
+/* Shared disclosure styling for every <details> in the app — the native
+   triangle is tiny, off-palette and sits too close to the label. */
+.scenario-details summary,
+.ice-details summary {
   cursor: pointer;
   color: var(--ink);
   font-weight: 650;
   font-size: 0.78rem;
-  padding: 0.15rem 0;
+  padding: 0.3rem 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scenario-details summary::-webkit-details-marker,
+.ice-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.scenario-details summary::before,
+.ice-details summary::before {
+  content: '';
+  width: 0.42rem;
+  height: 0.42rem;
+  border-right: 1.5px solid var(--teal);
+  border-bottom: 1.5px solid var(--teal);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+  flex: none;
+}
+
+.scenario-details[open] summary::before,
+.ice-details[open] summary::before {
+  transform: rotate(45deg);
 }
 
 .scenario-details ul {
-  margin: 0.45rem 0 0;
+  margin: 0.4rem 0 0;
   padding-left: 1.05rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+.scenario-details ul::marker,
+.scenario-details li::marker {
+  color: var(--teal);
 }
 
 .scenario-details .at-a-glance {
   color: var(--ink);
 }
 
+/* --- Timeline transport -------------------------------------------------- */
+
 .year-block {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
   min-width: 0;
 }
 
@@ -335,9 +548,9 @@ input {
 }
 
 .year-readout label {
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--muted);
 }
 
@@ -346,6 +559,7 @@ input {
   font-size: 1.6rem;
   letter-spacing: -0.03em;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .play-btn {
@@ -354,29 +568,31 @@ input {
   align-items: center;
   gap: 0.5rem;
   min-height: 2.6rem;
-  padding: 0 1rem 0 0.9rem;
-  border: 1px solid var(--teal);
+  padding: 0 1.05rem 0 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--teal) 45%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--teal) 12%, white);
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
   color: var(--teal);
   font-weight: 650;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, transform 0.05s;
+  transition: background 0.18s, color 0.18s, transform 0.08s, box-shadow 0.18s;
   -webkit-tap-highlight-color: transparent;
 }
 
 .play-btn:hover {
-  background: color-mix(in srgb, var(--teal) 20%, white);
+  background: color-mix(in srgb, var(--teal) 22%, transparent);
 }
 
 .play-btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .play-btn.playing {
   background: var(--teal);
-  color: #fff;
+  color: #04191c;
+  border-color: var(--teal);
+  box-shadow: 0 6px 20px -10px var(--teal);
 }
 
 .play-icon {
@@ -389,42 +605,108 @@ input {
   letter-spacing: 0;
 }
 
+/* Custom range: the native control is grey and unreadable on a dark shell.
+   --pct is set inline from React so the filled portion tracks the year. */
 input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   max-width: 100%;
-  /* Browsers put a default 2px margin on range inputs, which overflowed the
-     panel by a couple of pixels on narrow screens. */
   margin: 0;
-  accent-color: var(--teal);
+  height: 1.6rem;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--sc, var(--teal)) 0 var(--pct, 50%),
+    rgba(160, 200, 210, 0.16) var(--pct, 50%) 100%
+  );
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  /* (track height - thumb height) / 2 */
+  margin-top: -0.4rem;
+  border-radius: 50%;
+  background: #f2fbfb;
+  border: 2px solid var(--sc, var(--teal));
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.85);
+  transition: transform 0.12s ease;
+}
+
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+input[type='range']::-moz-range-track {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(160, 200, 210, 0.16);
+}
+
+input[type='range']::-moz-range-progress {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--sc, var(--teal));
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #f2fbfb;
+  border: 2px solid var(--sc, var(--teal));
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.85);
 }
 
 .year-ticks {
   display: flex;
   justify-content: space-between;
-  font-size: 0.7rem;
-  color: var(--muted);
+  font-size: 0.68rem;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
 }
+
+/* --- Metric readouts ----------------------------------------------------- */
 
 .metrics {
   margin: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: 0.5rem;
+}
+
+.metrics > div {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0.6rem 0.7rem 0.65rem;
 }
 
 .metrics dt {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
 }
 
 .metrics dd {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
@@ -432,19 +714,23 @@ input[type='range'] {
 
 .metrics dd span {
   font-family: var(--font-body);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 500;
-  color: var(--muted);
+  letter-spacing: 0;
+  color: var(--dim);
 }
+
+/* --- Globe stage --------------------------------------------------------- */
 
 .stage {
   grid-area: stage;
   position: relative;
   background: var(--stage);
-  border-radius: 2px;
+  border-radius: var(--r-lg);
   overflow: hidden;
   min-height: 520px;
-  border: 1px solid #1a3a42;
+  border: 1px solid var(--line);
+  box-shadow: var(--lift-2);
 }
 
 .globe-stage {
@@ -457,7 +743,7 @@ input[type='range'] {
   inset: 0;
   display: grid;
   place-items: center;
-  color: #9eb8b4;
+  color: var(--muted);
   font-family: var(--font-display);
   letter-spacing: 0.04em;
 }
@@ -472,63 +758,86 @@ input[type='range'] {
 
 .stage-caption {
   position: absolute;
-  left: 1rem;
-  bottom: 1rem;
+  left: 0.85rem;
+  bottom: 0.85rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(15, 42, 50, 0.72);
-  color: #d7e6e2;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.8rem;
-  letter-spacing: 0.02em;
-  border: 1px solid rgba(158, 184, 180, 0.25);
+  gap: 0.45rem;
+  background: rgba(7, 18, 24, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  color: #cfe3e2;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(158, 184, 180, 0.2);
+}
+
+.cap-sep {
+  opacity: 0.35;
+}
+
+.cap-strong {
+  color: #eaf5f4;
+  font-weight: 650;
 }
 
 .swatch {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 1px;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex: none;
 }
+
+/* --- Totals / country card ----------------------------------------------- */
 
 .totals {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+  gap: 0.5rem;
 }
 
 .totals > div {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  padding: 0.7rem 0.75rem;
+  border-radius: var(--r-md);
+  padding: 0.65rem 0.7rem 0.7rem;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
 
 .totals-label {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--muted);
+  line-height: 1.3;
 }
 
 .totals strong {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .totals em {
   font-style: normal;
-  font-size: 0.75rem;
-  color: var(--muted);
+  font-size: 0.72rem;
+  color: var(--dim);
 }
 
 .country-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+    var(--surface) 55%
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: var(--r-md);
   padding: 0.85rem 0.9rem;
   display: flex;
   flex-direction: column;
@@ -546,24 +855,34 @@ input[type='range'] {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.15rem;
+  letter-spacing: -0.02em;
 }
 
 .text-btn {
   appearance: none;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
   color: var(--muted);
   cursor: pointer;
-  font-size: 0.8rem;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-size: 0.72rem;
+  line-height: 1;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.text-btn:hover {
+  color: var(--ink);
+  border-color: var(--line-hi);
 }
 
 .country-metrics {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
+  gap: 0.55rem 0.4rem;
 }
 
 .country-metrics.four {
@@ -571,24 +890,25 @@ input[type='range'] {
 }
 
 .country-metrics dt {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--muted);
 }
 
 .country-metrics dd {
   margin: 0.15rem 0 0;
   font-weight: 650;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
   display: flex;
   flex-direction: column;
 }
 
 .country-metrics dd span {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--dim);
 }
 
 .country-metrics .danger {
@@ -596,8 +916,10 @@ input[type='range'] {
 }
 
 .country-metrics .danger span {
-  color: var(--danger);
+  color: color-mix(in srgb, var(--danger) 75%, var(--dim));
 }
+
+/* --- Ice ----------------------------------------------------------------- */
 
 .ice-meters {
   display: flex;
@@ -611,9 +933,10 @@ input[type='range'] {
   gap: 0.65rem;
   align-items: end;
   min-height: 11rem;
-  padding: 0.5rem 0.25rem 0;
-  background: #fff;
+  padding: 0.6rem 0.35rem 0;
+  background: var(--surface);
   border: 1px solid var(--line);
+  border-radius: var(--r-md);
 }
 
 .ice-bar-col {
@@ -629,8 +952,8 @@ input[type='range'] {
   width: 42%;
   max-width: 2.4rem;
   height: 7.5rem;
-  background: #d7e0db;
-  border-radius: 1px;
+  background: rgba(160, 200, 210, 0.12);
+  border-radius: 0.35rem;
   display: flex;
   align-items: flex-end;
   overflow: hidden;
@@ -639,22 +962,19 @@ input[type='range'] {
 .ice-bar-fill {
   width: 100%;
   transition: height 0.3s ease;
-  border-radius: 1px 1px 0 0;
+  border-radius: 0.3rem 0.3rem 0 0;
 }
 
 .ice-bar-fill.arctic {
-  background: linear-gradient(180deg, #f4fafc 0%, #b9d4e4 100%);
+  background: linear-gradient(180deg, #eaf8fd 0%, #74b4d0 100%);
 }
 
 .ice-bar-fill.sheet {
-  background: linear-gradient(180deg, #ffffff 0%, #d5e0e8 100%);
-  border: 1px solid #a8b8c2;
-  border-bottom: none;
-  box-sizing: border-box;
+  background: linear-gradient(180deg, #ffffff 0%, #a8c2d2 100%);
 }
 
 .ice-bar-fill.warn {
-  background: linear-gradient(180deg, #f0d8c8 0%, #c45c26 100%);
+  background: linear-gradient(180deg, #ffc9a5 0%, var(--accent) 100%);
 }
 
 .ice-bar-threshold {
@@ -671,43 +991,45 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 0.12rem;
-  padding: 0 0.15rem 0.55rem;
+  padding: 0 0.15rem 0.6rem;
 }
 
 .ice-bar-meta strong {
   font-family: var(--font-display);
   font-size: 0.85rem;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .ice-bar-meta span {
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   line-height: 1.25;
   color: var(--muted);
 }
 
 .ice-bar-meta em {
   font-style: normal;
-  font-size: 0.65rem;
-  color: var(--muted);
+  font-size: 0.63rem;
+  color: var(--dim);
 }
 
 .ice-bar-meta em.warn {
-  color: var(--danger);
+  color: var(--accent);
   font-weight: 650;
 }
 
 .what-it-takes {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-left: 3px solid var(--sc, var(--teal));
-  padding: 0.65rem 0.75rem 0.7rem;
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.8rem 0.75rem;
 }
 
 .what-it-takes-title {
   margin: 0 0 0.4rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 650;
@@ -720,7 +1042,7 @@ input[type='range'] {
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.8rem;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--ink);
 }
 
@@ -729,36 +1051,35 @@ input[type='range'] {
   justify-content: space-between;
   gap: 0.5rem;
   font-size: 0.8rem;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.35rem;
 }
 
 .ice-meter-top strong {
   font-family: var(--font-display);
   font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .bar-track {
   position: relative;
-  height: 0.55rem;
-  background: #d7e0db;
-  border-radius: 1px;
+  height: 0.5rem;
+  background: rgba(160, 200, 210, 0.14);
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 1px;
+  border-radius: 999px;
   transition: width 0.25s ease;
 }
 
 .bar-fill.arctic {
-  background: #c9dde8;
+  background: linear-gradient(90deg, #74b4d0, #bfe4f2);
 }
 
 .bar-fill.sheet {
-  background: #e8eef2;
-  border: 1px solid #b7c5cc;
-  box-sizing: border-box;
+  background: linear-gradient(90deg, #a8c2d2, #eef6fa);
 }
 
 .bar-mark {
@@ -768,30 +1089,32 @@ input[type='range'] {
   width: 2px;
   background: var(--accent);
   transform: translateX(-1px);
+  z-index: 1;
 }
 
 .ice-meter-foot {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 0.3rem;
-  font-size: 0.7rem;
+  margin-top: 0.35rem;
+  font-size: 0.68rem;
   color: var(--muted);
 }
 
 .ice-meter-foot .warn {
-  color: var(--danger);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .ice-pace {
   margin: 0;
   font-size: 0.82rem;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  padding: 0.65rem 0.75rem;
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.8rem;
 }
 
 .ice-meta {
@@ -818,23 +1141,23 @@ input[type='range'] {
 }
 
 .risk-low { color: var(--teal); }
-.risk-elevated { color: #9a6b2f; }
+.risk-elevated { color: #e8c07a; }
 .risk-high { color: var(--accent); }
 .risk-extreme { color: var(--danger); }
 
-/* --- Learn & sources --- */
+/* --- Learn & sources ----------------------------------------------------- */
 
 .learn-intro {
   margin: 0;
-  font-size: 0.86rem;
-  line-height: 1.5;
+  font-size: 0.85rem;
+  line-height: 1.55;
   color: var(--muted);
 }
 
 .reading-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .reading-heading {
@@ -846,8 +1169,8 @@ input[type='range'] {
 
 .reading-intro {
   margin: 0 0 0.15rem;
-  font-size: 0.76rem;
-  line-height: 1.45;
+  font-size: 0.75rem;
+  line-height: 1.5;
   color: var(--muted);
 }
 
@@ -864,23 +1187,23 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0.7rem 0.75rem;
+  border-radius: var(--r-md);
+  padding: 0.75rem 0.8rem;
   text-decoration: none;
   color: inherit;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 0.15s, transform 0.08s, box-shadow 0.15s;
+  transition: border-color 0.15s, transform 0.08s, background 0.15s;
 }
 
 .reading-card:hover {
-  border-color: var(--teal);
-  box-shadow: 0 6px 16px -12px rgba(7, 22, 28, 0.7);
+  border-color: color-mix(in srgb, var(--teal) 50%, transparent);
+  background: var(--surface-hi);
 }
 
 .reading-card:active {
-  transform: scale(0.99);
+  transform: scale(0.985);
 }
 
 .reading-card-top {
@@ -893,37 +1216,37 @@ input[type='range'] {
 .reading-title {
   font-weight: 650;
   font-size: 0.9rem;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .reading-kind {
   flex: none;
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.12rem 0.4rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: #eaefec;
+  background: rgba(160, 200, 210, 0.12);
   color: var(--muted);
 }
 
-.reading-kind.kind-tool { background: #dcebef; color: #1f5f6b; }
-.reading-kind.kind-report { background: #e6e9f2; color: #3f4a6b; }
-.reading-kind.kind-tracker { background: #f7e4d8; color: #8f4418; }
-.reading-kind.kind-data { background: #dcefe5; color: #256b4f; }
-.reading-kind.kind-explainer { background: #f2e9dc; color: #7a5a24; }
+.reading-kind.kind-tool { background: rgba(70, 200, 194, 0.16); color: #5fd6d0; }
+.reading-kind.kind-report { background: rgba(140, 160, 235, 0.16); color: #a3b3f2; }
+.reading-kind.kind-tracker { background: rgba(255, 145, 85, 0.16); color: #ffa871; }
+.reading-kind.kind-data { background: rgba(79, 209, 147, 0.16); color: #67dda6; }
+.reading-kind.kind-explainer { background: rgba(232, 192, 122, 0.16); color: #e8c07a; }
 
 .reading-blurb {
   font-size: 0.76rem;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--muted);
 }
 
 .reading-go {
   font-size: 0.68rem;
   color: var(--teal);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .note-list {
@@ -932,30 +1255,32 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .limits-note {
   margin: 0;
   font-size: 0.74rem;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--muted);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--muted);
-  padding: 0.65rem 0.75rem;
+  border-left: 3px solid var(--dim);
+  border-radius: var(--r-md);
+  padding: 0.7rem 0.8rem;
 }
 
-/* --- Rivers & freshwater --- */
+/* --- Rivers & freshwater -------------------------------------------------- */
 
 .peak-water-flag {
   margin: 0;
   font-size: 0.78rem;
-  line-height: 1.45;
-  background: #fff;
-  border: 1px solid var(--line);
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
   border-left: 3px solid var(--accent);
-  padding: 0.6rem 0.7rem;
+  border-radius: var(--r-md);
+  padding: 0.65rem 0.75rem;
 }
 
 .river-list {
@@ -971,24 +1296,31 @@ input[type='range'] {
   appearance: none;
   width: 100%;
   text-align: left;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  padding: 0.55rem 0.65rem;
+  border-radius: var(--r-md);
+  padding: 0.6rem 0.7rem;
   cursor: pointer;
+  color: var(--ink);
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
   font: inherit;
-  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background 0.15s, transform 0.08s;
 }
 
 .river-row:hover {
-  border-color: var(--teal);
+  border-color: var(--line-hi);
+}
+
+.river-row:active {
+  transform: scale(0.99);
 }
 
 .river-row.active {
-  border-color: var(--teal);
-  background: color-mix(in srgb, var(--teal) 8%, white);
+  border-color: color-mix(in srgb, var(--teal) 50%, transparent);
+  background: color-mix(in srgb, var(--teal) 12%, var(--surface));
   box-shadow: inset 3px 0 0 var(--teal);
 }
 
@@ -1010,7 +1342,7 @@ input[type='range'] {
   font-variant-numeric: tabular-nums;
 }
 
-.river-delta.rising { color: var(--teal); }
+.river-delta.rising { color: #5ec8ee; }
 .river-delta.stable { color: var(--muted); }
 .river-delta.declining { color: var(--accent); }
 .river-delta.severe { color: var(--danger); }
@@ -1018,9 +1350,9 @@ input[type='range'] {
 .river-track {
   position: relative;
   display: block;
-  height: 0.45rem;
-  background: #e2e9e5;
-  border-radius: 1px;
+  height: 0.4rem;
+  background: rgba(160, 200, 210, 0.14);
+  border-radius: 999px;
   overflow: hidden;
 }
 
@@ -1031,19 +1363,20 @@ input[type='range'] {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--muted);
-  opacity: 0.55;
+  background: #cfe3e2;
+  opacity: 0.4;
   z-index: 1;
 }
 
 .river-fill {
   display: block;
   height: 100%;
+  border-radius: 999px;
   transition: width 0.25s ease;
 }
 
-.river-fill.rising { background: #4cbae8; }
-.river-fill.stable { background: #8fa8a2; }
+.river-fill.rising { background: #5ec8ee; }
+.river-fill.stable { background: #7f989c; }
 .river-fill.declining { background: var(--accent); }
 .river-fill.severe { background: var(--danger); }
 
@@ -1057,27 +1390,28 @@ input[type='range'] {
 }
 
 .river-pill {
-  padding: 0.1rem 0.35rem;
+  padding: 0.14rem 0.45rem;
   border-radius: 999px;
-  font-size: 0.65rem;
-  font-weight: 650;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
-.river-pill.rising { background: #dff1f9; color: #1d6a86; }
-.river-pill.stable { background: #eaefec; color: var(--muted); }
-.river-pill.declining { background: #f7e4d8; color: #8f4418; }
-.river-pill.severe { background: #f4dcd4; color: var(--danger); }
+.river-pill.rising { background: rgba(94, 200, 238, 0.16); color: #7dd4f2; }
+.river-pill.stable { background: rgba(160, 200, 210, 0.12); color: var(--muted); }
+.river-pill.declining { background: rgba(255, 145, 85, 0.16); color: #ffa871; }
+.river-pill.severe { background: rgba(255, 111, 92, 0.18); color: #ff8877; }
 
 .river-detail {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   font-size: 0.74rem;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--muted);
   border-top: 1px solid var(--line);
-  padding-top: 0.4rem;
+  padding-top: 0.45rem;
   margin-top: 0.1rem;
 }
 
@@ -1103,33 +1437,32 @@ input[type='range'] {
   color: var(--muted);
 }
 
-.ice-details summary {
-  cursor: pointer;
-  color: var(--ink);
-  font-weight: 600;
-}
-
 .ice-details ul {
   margin: 0.5rem 0 0;
   padding-left: 1.1rem;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  line-height: 1.4;
+  line-height: 1.45;
 }
+
+/* --- Globe overlays ------------------------------------------------------ */
 
 .ice-legend {
   position: absolute;
-  right: 1rem;
-  bottom: 1rem;
+  right: 0.85rem;
+  bottom: 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  background: rgba(15, 42, 50, 0.72);
-  color: #d7e6e2;
-  padding: 0.5rem 0.7rem;
-  font-size: 0.72rem;
-  border: 1px solid rgba(158, 184, 180, 0.25);
+  background: rgba(7, 18, 24, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  color: #cfe3e2;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--r-md);
+  font-size: 0.7rem;
+  border: 1px solid rgba(158, 184, 180, 0.2);
 }
 
 .ice-legend span {
@@ -1139,85 +1472,28 @@ input[type='range'] {
 }
 
 .ice-legend .lg {
-  width: 0.55rem;
-  height: 0.55rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
   display: inline-block;
 }
 
 .ice-legend .lg.arctic { background: #e8f2f7; }
-.ice-legend .lg.sheet { background: #f7fafc; border: 1px solid #9eb0ba; }
-.ice-legend .lg.flood { background: #c45c26; }
-
-.hint {
-  margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-
-.search-row input {
-  width: 100%;
-  border: 1px solid var(--line);
-  background: #fff;
-  padding: 0.55rem 0.7rem;
-  border-radius: 2px;
-}
-
-.map-mode-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
-}
-
-.map-mode-switch.three {
-  grid-template-columns: 1fr 1fr 1fr;
-}
-
-.rain-wet {
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  color: #2a6f7a;
-}
-
-.rain-dry {
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  color: var(--danger);
-}
-
-.map-mode-switch button {
-  appearance: none;
-  border: 1px solid var(--line);
-  background: #fff;
-  padding: 0.45rem 0.5rem;
-  font-size: 0.78rem;
-  cursor: pointer;
-  color: var(--muted);
-}
-
-.map-mode-switch button.active {
-  border-color: var(--teal);
-  color: var(--ink);
-  background: color-mix(in srgb, var(--teal) 12%, white);
-  font-weight: 650;
-  box-shadow: inset 3px 0 0 var(--teal);
-}
-
-.temp-cell {
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  color: var(--accent);
-}
+.ice-legend .lg.sheet { background: #f7fafc; }
+.ice-legend .lg.flood { background: var(--accent); }
 
 .temp-legend {
   position: absolute;
-  right: 1rem;
-  bottom: 1rem;
-  background: rgba(15, 42, 50, 0.78);
-  color: #d7e6e2;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid rgba(158, 184, 180, 0.25);
-  font-size: 0.7rem;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  background: rgba(7, 18, 24, 0.74);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  color: #cfe3e2;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(158, 184, 180, 0.2);
+  font-size: 0.68rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1225,9 +1501,9 @@ input[type='range'] {
 }
 
 .temp-legend-title {
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
 .temp-legend-scale {
@@ -1244,16 +1520,104 @@ input[type='range'] {
 
 .temp-legend-note {
   margin-top: 0.15rem;
-  opacity: 0.75;
-  line-height: 1.3;
+  opacity: 0.7;
+  line-height: 1.35;
 }
+
+.hint {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+/* --- Search & segmented controls ----------------------------------------- */
+
+.search-row input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.6rem 0.85rem;
+  border-radius: 999px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.search-row input::placeholder {
+  color: var(--dim);
+}
+
+.search-row input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--teal) 55%, transparent);
+  background: var(--surface-hi);
+}
+
+/* iOS-style segmented control: a track with a raised active thumb. */
+.map-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem;
+  padding: 0.22rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.map-mode-switch.three {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.map-mode-switch button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  border-radius: calc(var(--r-md) - 0.24rem);
+  padding: 0.5rem 0.4rem;
+  min-height: 2.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s, background 0.18s;
+}
+
+.map-mode-switch button.active {
+  color: var(--ink);
+  background: var(--surface-max);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset,
+    0 4px 12px -8px rgba(0, 0, 0, 0.9);
+}
+
+.rain-wet {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: #5ec8ee;
+}
+
+.rain-dry {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--danger);
+}
+
+.temp-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--accent);
+}
+
+/* --- Ranking table ------------------------------------------------------- */
 
 .table-wrap {
   overflow: auto;
   flex: 1;
   min-height: 180px;
   border: 1px solid var(--line);
-  background: #fff;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -1264,28 +1628,34 @@ table {
 
 th {
   text-align: left;
-  padding: 0.5rem 0.65rem;
-  background: #eef2f0;
+  padding: 0.55rem 0.65rem;
+  /* Opaque: a sticky header over translucent rows would smear as it scrolls. */
+  background: #101b21;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   position: sticky;
   top: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--line);
 }
 
 .sort-btn {
   appearance: none;
   border: none;
   background: transparent;
-  padding: 0;
-  margin: 0;
+  /* Padding grows the hit area to ~34px; the matching negative margin keeps
+     the header row the same height, so the label alone is only 13px tall. */
+  padding: 0.65rem 0.35rem;
+  margin: -0.65rem -0.35rem;
   font: inherit;
   font-size: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   color: var(--muted);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sort-btn:hover {
@@ -1293,39 +1663,51 @@ th {
 }
 
 .sort-btn.active {
-  color: var(--ink);
+  color: var(--teal);
   font-weight: 700;
 }
 
 td {
-  padding: 0.48rem 0.65rem;
-  border-top: 1px solid #e4ebe7;
+  padding: 0.55rem 0.65rem;
+  border-top: 1px solid rgba(150, 190, 200, 0.09);
 }
 
 tbody tr {
   cursor: pointer;
+  transition: background 0.12s;
 }
 
-tbody tr:hover,
+tbody tr:hover {
+  background: var(--surface-hi);
+}
+
 tbody tr.active {
-  background: #e7f0ec;
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+}
+
+.empty-row td {
+  padding: 1.1rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
 }
 
 .footnote {
   margin: 0;
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--dim);
 }
 
-/* --- Mobile tab deck --- */
+/* ==========================================================================
+   Mobile sheet, transport and tab bar
+   ========================================================================== */
 
 .deck {
   /* Must not share the globe's grid area, or it renders underneath it. */
   grid-area: controls;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
   min-width: 0;
 }
 
@@ -1345,44 +1727,112 @@ tbody tr.active {
   }
 }
 
-/* Vestibular safety: never slide panels for readers who ask for less motion. */
-@media (prefers-reduced-motion: reduce) {
-  .deck-body {
-    animation: none;
-  }
-
-  .tabbar-btn,
-  .tabbar-btn svg,
-  .reading-card,
-  .play-btn {
-    transition: none;
-  }
+/* Sheet grabber — the affordance that says "this panel slides over the globe". */
+.deck-grip {
+  width: 2.4rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--line-hi);
+  margin: 0.5rem auto 0.15rem;
+  flex: none;
 }
 
-.empty-row td {
-  padding: 1rem 0.65rem;
+/* Always-visible transport docked in the sheet header, so the timeline can be
+   scrubbed from any tab while the globe is still on screen. */
+.scrubber {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0.1rem 0.55rem;
+}
+
+.scrub-play {
+  appearance: none;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--sc, var(--teal)) 55%, transparent);
+  background: color-mix(in srgb, var(--sc, var(--teal)) 16%, transparent);
+  color: var(--sc, var(--teal));
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s, background 0.18s;
+}
+
+.scrub-play:active {
+  transform: scale(0.93);
+}
+
+.scrub-play.playing {
+  background: var(--sc, var(--teal));
+  color: #04191c;
+  box-shadow: 0 6px 20px -10px var(--sc, var(--teal));
+}
+
+.scrub-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.scrub-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.scrub-year {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.scrub-note {
+  font-size: 0.68rem;
   color: var(--muted);
-  font-size: 0.8rem;
-  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Taller than the track it draws: the extra height is pure hit area, so the
+   thumb stays draggable with a thumb rather than a fingertip's edge. */
+.scrubber input[type='range'] {
+  height: 2rem;
 }
 
 /* --- Fixed bottom tab bar (phones) --- */
 
 .tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: max(0.6rem, env(safe-area-inset-left));
+  right: max(0.6rem, env(safe-area-inset-right));
+  bottom: calc(0.5rem + env(safe-area-inset-bottom));
   z-index: 20;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 0.15rem;
-  padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom));
-  /* Fully opaque on purpose: the CSS minifier strips the unprefixed
-     backdrop-filter, so a frosted bar would just be a see-through one. */
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-  box-shadow: 0 -8px 20px -16px rgba(7, 22, 28, 0.8);
+  padding: 0.3rem;
+  border-radius: var(--r-lg);
+  /* Mostly opaque so the bar still reads if backdrop-filter is unsupported. */
+  background: rgba(10, 20, 26, 0.9);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid var(--line);
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 
 .tabbar-btn {
@@ -1397,9 +1847,9 @@ tbody tr.active {
   /* Comfortably above the 44px touch-target guidance. */
   min-height: 3rem;
   padding: 0.3rem 0.1rem;
-  border-radius: 0.7rem;
-  color: var(--muted);
-  font-size: 0.65rem;
+  border-radius: calc(var(--r-lg) - 0.3rem);
+  color: var(--dim);
+  font-size: 0.63rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -1408,9 +1858,9 @@ tbody tr.active {
 }
 
 .tabbar-btn svg {
-  width: 1.35rem;
-  height: 1.35rem;
-  transition: transform 0.18s;
+  width: 1.3rem;
+  height: 1.3rem;
+  transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
 }
 
 .tabbar-btn:active {
@@ -1419,12 +1869,16 @@ tbody tr.active {
 
 .tabbar-btn.active {
   color: var(--teal);
-  background: color-mix(in srgb, var(--teal) 11%, transparent);
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
 }
 
 .tabbar-btn.active svg {
-  transform: translateY(-1px) scale(1.06);
+  transform: translateY(-1px) scale(1.1);
 }
+
+/* ==========================================================================
+   Breakpoints
+   ========================================================================== */
 
 /* Tablet: globe spans the top, the four panels sit in two readable columns. */
 @media (max-width: 1100px) {
@@ -1450,55 +1904,85 @@ tbody tr.active {
   }
 }
 
-/* Phones: single column, globe pinned, one panel at a time. */
+/* Phones: single column, globe pinned, one panel at a time under a sheet. */
 @media (max-width: 760px) {
+  .app {
+    --pad: 0.85rem;
+    padding: 0.6rem var(--pad) calc(5.4rem + env(safe-area-inset-bottom));
+    padding-left: max(var(--pad), env(safe-area-inset-left));
+    padding-right: max(var(--pad), env(safe-area-inset-right));
+    gap: 0.55rem;
+  }
+
+  /* Masthead collapses to a single app-bar row: wordmark + live readout. */
+  .topbar {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.6rem;
+    padding: 0 0.15rem;
+  }
+
+  .brand-mark {
+    font-size: 1.3rem;
+  }
+
+  .brand-sub,
+  .lede {
+    display: none;
+  }
+
+  .live-chip {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
   .layout {
     grid-template-columns: 1fr;
     grid-template-areas:
       'stage'
-      'controls'
-      'stats';
-  }
-}
-
-
-/* Phones: pin the globe so it stays on screen while the controls scroll under it. */
-@media (max-width: 760px) {
-  .app {
-    /* Bottom padding clears the fixed tab bar plus the home indicator. */
-    padding: 0.9rem 0.9rem calc(4.9rem + env(safe-area-inset-bottom));
-    gap: 0.75rem;
-    padding-left: max(0.9rem, env(safe-area-inset-left));
-    padding-right: max(0.9rem, env(safe-area-inset-right));
+      'controls';
+    gap: 0;
   }
 
-  /* Reclaim vertical space above the globe. */
-  .brand-mark {
-    font-size: 1.75rem;
-  }
-
-  .brand-sub {
-    font-size: 0.68rem;
-  }
-
-  .lede {
-    font-size: 0.82rem;
-    line-height: 1.35;
-    max-width: none;
-  }
-
-  .layout {
-    gap: 0.75rem;
-  }
-
+  /* Full-bleed hero: cancel the app padding so the globe reaches the edges. */
   .stage {
     position: sticky;
     top: 0;
-    z-index: 5;
+    z-index: 4;
     min-height: 0;
-    height: 46vh;
-    height: 46dvh;
-    box-shadow: 0 12px 22px -14px rgba(7, 22, 28, 0.85);
+    height: 44vh;
+    height: 44dvh;
+    margin-inline: calc(var(--pad) * -1);
+    border-inline: none;
+    border-top: none;
+    border-radius: 0 0 var(--r-xl) var(--r-xl);
+  }
+
+  /* The panel deck becomes a bottom sheet riding over the pinned globe. */
+  .deck {
+    position: relative;
+    z-index: 5;
+    margin: -1.1rem calc(var(--pad) * -1) 0;
+    padding: 0 var(--pad) 0.5rem;
+    background: linear-gradient(180deg, #0d181e 0%, var(--bg-0) 30%);
+    border-top: 1px solid var(--line);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    box-shadow: 0 -20px 44px -22px rgba(0, 0, 0, 0.95);
+    min-height: 60vh;
+  }
+
+  /* Inside the sheet the panel chrome is redundant — the sheet is the card. */
+  .deck .panel {
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0.25rem 0 0;
+    gap: 0.8rem;
+  }
+
+  .panel-head h2 {
+    font-size: 1.2rem;
   }
 
   /* Two-up scenario chips halve the tall stack. */
@@ -1511,7 +1995,7 @@ tbody tr.active {
     flex-wrap: nowrap;
     align-items: flex-start;
     gap: 0.12rem;
-    padding: 0.5rem 0.6rem;
+    padding: 0.55rem 0.6rem;
     min-width: 0;
   }
 
@@ -1520,7 +2004,7 @@ tbody tr.active {
   }
 
   .scenario-label {
-    font-size: 0.85rem;
+    font-size: 0.84rem;
   }
 
   .scenario-warm {
@@ -1532,7 +2016,7 @@ tbody tr.active {
   }
 
   .table-wrap {
-    max-height: 60vh;
+    max-height: 62vh;
   }
 
   /* Drop the absolute-rainfall column so the remaining four fit without
@@ -1544,21 +2028,64 @@ tbody tr.active {
 
   th,
   td {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
   }
 
+  /* Roomier rows: 0.55rem padding on a phone is a cramped tap target. */
+  td {
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+  }
+
+  /* Sits above the sheet's overlap, or the rounded top edge slices it in half. */
   .stage-caption {
-    left: 0.55rem;
-    bottom: 0.55rem;
-    padding: 0.35rem 0.55rem;
-    font-size: 0.68rem;
+    left: 0.6rem;
+    bottom: 1.5rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.66rem;
+    max-width: calc(100% - 1.2rem);
+  }
+
+  /* Year and warming already live in the app-bar chip; dropping them keeps the
+     caption to a single line. */
+  .cap-dup {
+    display: none;
   }
 
   /* The colour-scale legend takes up too much of a phone screen and blocks the
      globe. Hide it on mobile — the on-globe Δ°C labels and the ranking table
      already carry the scale. */
-  .temp-legend {
+  .temp-legend,
+  .ice-legend {
+    display: none;
+  }
+
+  .country-metrics.four {
+    gap: 0.6rem 0.5rem;
+  }
+
+  /* Disclosure rows are 25px tall by their text alone — pad them out to a
+     comfortable tap target. */
+  .scenario-details summary,
+  .ice-details summary {
+    padding: 0.55rem 0;
+    font-size: 0.82rem;
+  }
+}
+
+/* Very narrow phones (iPhone SE and similar). */
+@media (max-width: 380px) {
+  .tabbar-btn {
+    font-size: 0.58rem;
+  }
+
+  .tabbar-btn svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .scrub-note {
     display: none;
   }
 }
@@ -1568,11 +2095,18 @@ tbody tr.active {
    Must stay last — it overrides the max-width:760px block above. */
 @media (max-height: 520px) and (max-width: 1100px) {
   .stage {
-    position: static;
+    /* `relative`, never `static`: un-sticking it is the point, but .globe-stage
+       is absolutely positioned inside, so a static stage stops being its
+       containing block and the canvas escapes to cover the whole page. */
+    position: relative;
     /* Leaves room for content instead of filling the whole viewport. */
     height: 62vh;
     height: 62dvh;
     min-height: 200px;
+  }
+
+  .deck {
+    min-height: 0;
   }
 
   /* The masthead is pure overhead when the screen is this short. */
@@ -1581,10 +2115,33 @@ tbody tr.active {
   }
 
   .brand-mark {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
   }
 
   .lede {
     display: none;
+  }
+}
+
+/* Vestibular safety: never slide panels for readers who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .deck-body {
+    animation: none;
+  }
+
+  .live-chip.is-playing .live-dot {
+    animation: none;
+  }
+
+  .tabbar-btn,
+  .tabbar-btn svg,
+  .reading-card,
+  .river-row,
+  .scenario,
+  .scrub-play,
+  .play-btn,
+  .scenario-details summary::before,
+  .ice-details summary::before {
+    transition: none;
   }
 }
