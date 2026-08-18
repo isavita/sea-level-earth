@@ -27,6 +27,7 @@ import {
 import { useIsMobile } from '../lib/useIsMobile'
 import { localSeaLevel } from '../lib/regionalSeaLevel'
 import type { SeaLevelContext } from '../lib/impact'
+import type { ResolvedTheme } from '../lib/useTheme'
 import {
   allRiverStates,
   riverFlowColor,
@@ -36,8 +37,36 @@ import {
 
 export type MapMode = 'temp' | 'loss' | 'rain'
 
+/**
+ * The globe's own colours, per theme: the sky behind it, the glow around it,
+ * and the ocean on it.
+ *
+ * The ocean matters more than it looks. `earth-ocean.png` is a single flat
+ * near-black teal, which is what gives the dark theme its depth — and what made
+ * the light theme read as a black blot dropped on a pale page. Since the
+ * texture carries no detail, the light variant is a one-pixel PNG inlined as a
+ * data URI: same result, no second request, nothing to keep in sync on disk.
+ */
+const SKY: Record<
+  ResolvedTheme,
+  { background: string; atmosphere: string; ocean: string }
+> = {
+  dark: {
+    background: '#07161c',
+    atmosphere: '#6fa9b8',
+    ocean: '/earth-ocean.png',
+  },
+  light: {
+    background: '#dbe8ee',
+    atmosphere: '#3f8fa8',
+    ocean:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mPo33YSAAPmAg89/GNkAAAAAElFTkSuQmCC',
+  },
+}
+
 interface EarthGlobeProps {
   sea: SeaLevelContext
+  theme: ResolvedTheme
   warmingC: number
   mapMode: MapMode
   /** True while the timeline is auto-playing — labels are thinned for speed. */
@@ -141,6 +170,7 @@ const PATH_POINT_LNG = (p: unknown) => (p as [number, number])[1]
 
 export function EarthGlobe({
   sea,
+  theme,
   warmingC,
   mapMode,
   playing,
@@ -548,11 +578,11 @@ export function EarthGlobe({
           ref={globeRef}
           width={dims.w}
           height={dims.h}
-          backgroundColor="#07161c"
-          globeImageUrl="/earth-ocean.png"
+          backgroundColor={SKY[theme].background}
+          globeImageUrl={SKY[theme].ocean}
           showGraticules={false}
           showAtmosphere
-          atmosphereColor="#6fa9b8"
+          atmosphereColor={SKY[theme].atmosphere}
           atmosphereAltitude={0.12}
           polygonsData={features}
           polygonGeoJsonGeometry="geometry"

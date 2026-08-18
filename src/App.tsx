@@ -19,6 +19,8 @@ import { CountriesProvider, useCountries } from './lib/CountriesContext'
 import type { CountryFeature } from './lib/countries'
 import { useTimelinePlayback } from './lib/useTimelinePlayback'
 import { useIsMobile } from './lib/useIsMobile'
+import { useTheme } from './lib/useTheme'
+import { ThemeToggle } from './components/ThemeToggle'
 import './App.css'
 
 type PanelTabId = 'pathway' | 'ice' | 'rivers' | 'countries' | 'learn'
@@ -74,6 +76,13 @@ function AppShell() {
   const [mapMode, setMapMode] = useState<MapMode>('temp')
   const [selectedRiverId, setSelectedRiverId] = useState<string | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTabId>('pathway')
+  /**
+   * Phones can drop the sheet to a peek so the globe gets the screen. The
+   * scrubber stays visible either way — collapsing to look at the map is
+   * exactly when scrubbing the year is most useful.
+   */
+  const [deckOpen, setDeckOpen] = useState(true)
+  const theme = useTheme()
 
   const scenario = SCENARIOS[scenarioId]
   const seaLevelM = useMemo(
@@ -108,13 +117,17 @@ function AppShell() {
     if (!id) return
     setMapMode('rain')
     setPanelTab('rivers')
+    setDeckOpen(true)
   }
 
   // Tapping a country on the globe should reveal its numbers, which on mobile
   // live behind the Countries tab.
   const selectCountry = (feature: CountryFeature | null) => {
     setSelected(feature)
-    if (feature) setPanelTab('countries')
+    if (feature) {
+      setPanelTab('countries')
+      setDeckOpen(true)
+    }
   }
 
   const panels = {
@@ -164,7 +177,11 @@ function AppShell() {
   // the user cannot actually see.
   return (
     /* --sc carries the pathway colour to the slider, sheet and live dot. */
-    <div className="app" style={{ ['--sc' as string]: scenario.color }}>
+    <div
+      className="app"
+      data-deck={isMobile && !deckOpen ? 'peek' : 'open'}
+      style={{ ['--sc' as string]: scenario.color }}
+    >
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">Meridian</span>
@@ -174,11 +191,18 @@ function AppShell() {
           Pick a warming pathway and press play to watch seas rise, ice retreat,
           rivers run dry, and every country warm through 2300.
         </p>
-        {/* Phone app-bar readout — the masthead's copy is hidden at that size. */}
-        <div className={`live-chip${playing ? ' is-playing' : ''}`}>
-          <span className="live-dot" aria-hidden />
-          <b>{displayYear}</b>
-          <span>+{warmingC.toFixed(1)}°C</span>
+        <div className="topbar-end">
+          {/* Phone app-bar readout — the masthead copy is hidden at that size. */}
+          <div className={`live-chip${playing ? ' is-playing' : ''}`}>
+            <span className="live-dot" aria-hidden />
+            <b>{displayYear}</b>
+            <span>+{warmingC.toFixed(1)}°C</span>
+          </div>
+          <ThemeToggle
+            choice={theme.choice}
+            resolved={theme.resolved}
+            onCycle={theme.cycle}
+          />
         </div>
       </header>
 
@@ -193,6 +217,7 @@ function AppShell() {
           >
             <EarthGlobe
               sea={sea}
+              theme={theme.resolved}
               warmingC={warmingC}
               mapMode={mapMode}
               playing={playing}
@@ -228,7 +253,18 @@ function AppShell() {
           /* Phones get one panel at a time behind the bottom bar. Stacking all
              of them produced a 4.4-screen scroll that buried the controls. */
           <div className="deck">
-            <div className="deck-grip" aria-hidden />
+            <button
+              type="button"
+              className="deck-grip"
+              aria-expanded={deckOpen}
+              aria-controls={`panel-${panelTab}`}
+              onClick={() => setDeckOpen((v) => !v)}
+            >
+              <span className="deck-grip-bar" aria-hidden />
+              <span className="sr-only">
+                {deckOpen ? 'Hide panel and show more map' : 'Show panel'}
+              </span>
+            </button>
             <Scrubber
               year={displayYear}
               playing={playing}
@@ -283,7 +319,10 @@ function AppShell() {
               }
               aria-selected={panelTab === t.id}
               className={panelTab === t.id ? 'tabbar-btn active' : 'tabbar-btn'}
-              onClick={() => setPanelTab(t.id)}
+              onClick={() => {
+                setPanelTab(t.id)
+                setDeckOpen(true)
+              }}
             >
               <TabIcon id={t.id} />
               <span>{t.label}</span>

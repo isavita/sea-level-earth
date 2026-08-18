@@ -13,18 +13,35 @@
   --bg-1: #0b141a;
   --bg-2: #101d24;
   --stage: #07161c;
+  --page-top: #081217;
+  --page-bottom: #04090c;
+  --page-glow-1: rgba(52, 128, 140, 0.28);
+  --page-glow-2: rgba(255, 145, 85, 0.08);
+  --sheet-top: #0d181e;
+
+  /* Raw channels for the tints that get stacked at many different alphas.
+     Keeping them as bare triplets is what lets the light theme invert the
+     whole glass system by redefining four values instead of thirty rules. */
+  --tint: 160, 200, 210;
+  --line-rgb: 150, 190, 200;
+  --shadow-rgb: 0, 0, 0;
+  --hi-rgb: 255, 255, 255;
+  --panel-tint-a: 0.075;
+  --panel-tint-b: 0.03;
 
   /* Translucent surfaces stack over the base without new opaque colours. */
-  --surface: rgba(160, 200, 210, 0.055);
-  --surface-hi: rgba(160, 200, 210, 0.1);
-  --surface-max: rgba(160, 200, 210, 0.15);
-  --line: rgba(150, 190, 200, 0.16);
-  --line-hi: rgba(150, 190, 200, 0.32);
+  --surface: rgba(var(--tint), 0.055);
+  --surface-hi: rgba(var(--tint), 0.1);
+  --surface-max: rgba(var(--tint), 0.15);
+  --line: rgba(var(--line-rgb), 0.16);
+  --line-hi: rgba(var(--line-rgb), 0.32);
 
   /* Ink ----------------------------------------------------------------- */
   --ink: #e8f2f3;
   --muted: #8ea6ab;
   --dim: #6c8388;
+
+  --ink-dim: #c6d7da;
 
   /* Accents — brightened from the print palette so they carry on black. */
   --teal: #46c8c2;
@@ -34,14 +51,45 @@
   /* Below pre-industrial — matches the blue end of the map's temperature ramp. */
   --cold: #6ea6dc;
 
+  /* Text-weight variants of the accents. Badge and pill labels need more
+     lightness than the fills do, and the light theme needs the opposite. */
+  --teal-ink: #5fd6d0;
+  --accent-ink: #ffa871;
+  --danger-ink: #ff8877;
+  --good-ink: #67dda6;
+  --amber-ink: #e8c07a;
+  --sky-ink: #5ec8ee;
+  --indigo-ink: #a3b3f2;
+  --neutral-ink: #a9c0c4;
+
+  /* Small surfaces that are not part of the glass stack. */
+  --thumb: #f2fbfb;
+  --on-accent: #04191c;
+  --thead-bg: #101b21;
+  --tabbar-bg: rgba(10, 20, 26, 0.9);
+  --brand-a: #ffffff;
+  --brand-b: #8fd8d4;
+  --brand-c: #4fa8b8;
+
+  /* Ice and river bars: pale on a dark page, saturated on a light one. */
+  --ice-arctic-a: #eaf8fd;
+  --ice-arctic-b: #74b4d0;
+  --ice-sheet-a: #ffffff;
+  --ice-sheet-b: #a8c2d2;
+  --ice-warn-a: #ffc9a5;
+  --bar-arctic-a: #74b4d0;
+  --bar-arctic-b: #bfe4f2;
+  --bar-sheet-a: #a8c2d2;
+  --bar-sheet-b: #eef6fa;
+
   --font-display: 'Syne', sans-serif;
   --font-body: 'Figtree', sans-serif;
 
   /* Elevation: one soft ambient + one tight contact shadow. */
-  --lift-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 8px 24px -18px rgba(0, 0, 0, 0.9);
-  --lift-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 18px 40px -24px rgba(0, 0, 0, 0.95);
+  --lift-1: 0 1px 0 rgba(var(--hi-rgb), 0.04) inset,
+    0 8px 24px -18px rgba(var(--shadow-rgb), 0.9);
+  --lift-2: 0 1px 0 rgba(var(--hi-rgb), 0.05) inset,
+    0 18px 40px -24px rgba(var(--shadow-rgb), 0.95);
 
   --r-sm: 0.55rem;
   --r-md: 0.85rem;
@@ -56,6 +104,100 @@
   -webkit-font-smoothing: antialiased;
   /* Makes native form controls (range, search, scrollbars) render dark. */
   color-scheme: dark;
+}
+
+/* ==========================================================================
+   Light theme.
+
+   Only tokens are redefined — every rule above and below is written against
+   them, so the whole shell inverts without a second copy of the stylesheet.
+   Three things carry the inversion: the glass tint flips from a pale film over
+   near-black to a deep-teal film over near-white, the shadow gets a colour
+   (pure black reads as dirt on a light page), and the accent inks darken,
+   because the values tuned to glow on black fail contrast on paper.
+
+   There is no `prefers-color-scheme` query here on purpose. The runtime always
+   resolves the preference — system included — to a concrete `data-theme` on
+   <html>, which keeps one source of truth and lets the manual override win
+   without a specificity fight.
+   ========================================================================== */
+
+:root[data-theme='light'] {
+  --bg-0: #f2f6f7;
+  --bg-1: #e9f0f2;
+  --bg-2: #dfe9ec;
+  --page-top: #f7fafb;
+  --page-bottom: #e4edef;
+  --page-glow-1: rgba(70, 160, 172, 0.16);
+  --page-glow-2: rgba(255, 145, 85, 0.07);
+  --sheet-top: #ffffff;
+  /* Matches the globe's own backdrop so the canvas and its frame are one. */
+  --stage: #dbe8ee;
+
+  --tint: 16, 60, 72;
+  --line-rgb: 30, 76, 88;
+  --shadow-rgb: 18, 48, 56;
+  --hi-rgb: 255, 255, 255;
+  --panel-tint-a: 0.045;
+  --panel-tint-b: 0.015;
+
+  --surface: rgba(var(--tint), 0.045);
+  --surface-hi: rgba(var(--tint), 0.08);
+  --surface-max: rgba(var(--tint), 0.13);
+  --line: rgba(var(--line-rgb), 0.18);
+  --line-hi: rgba(var(--line-rgb), 0.34);
+
+  --ink: #0d2129;
+  --muted: #476068;
+  --dim: #58717a;
+  --ink-dim: #24404a;
+
+  --teal: #0f7874;
+  --accent: #b35016;
+  --danger: #c2352a;
+  --good: #17794f;
+  --cold: #2b6ca8;
+
+  --teal-ink: #0c6b68;
+  --accent-ink: #a84810;
+  --danger-ink: #a82a20;
+  --good-ink: #126542;
+  --amber-ink: #8a6212;
+  --sky-ink: #1f6d94;
+  --indigo-ink: #3f4c9c;
+  --neutral-ink: #3d5a63;
+
+  --thumb: #ffffff;
+  --on-accent: #ffffff;
+  --thead-bg: #e3ecee;
+  --tabbar-bg: rgba(250, 253, 253, 0.92);
+  --brand-a: #0c3a44;
+  --brand-b: #14807c;
+  --brand-c: #2a93b5;
+
+  --ice-arctic-a: #7fc0dc;
+  --ice-arctic-b: #2f7fa5;
+  --ice-sheet-a: #b9cddb;
+  --ice-sheet-b: #5d7f95;
+  --ice-warn-a: #f0a06a;
+  --bar-arctic-a: #2f7fa5;
+  --bar-arctic-b: #7fc0dc;
+  --bar-sheet-a: #5d7f95;
+  --bar-sheet-b: #b9cddb;
+
+  --lift-1: 0 1px 0 rgba(var(--hi-rgb), 0.8) inset,
+    0 6px 18px -14px rgba(var(--shadow-rgb), 0.5);
+  --lift-2: 0 1px 0 rgba(var(--hi-rgb), 0.9) inset,
+    0 16px 34px -22px rgba(var(--shadow-rgb), 0.45);
+
+  color-scheme: light;
+}
+
+/* The globe keeps its own night sky in both themes — it is a lit sphere in
+   space, and the overlays that sit directly on it stay dark glass so their
+   text keeps working against the ocean rather than against the page. */
+:root[data-theme='light'] .stage {
+  border-color: rgba(var(--line-rgb), 0.22);
 }
 
 * {
@@ -74,15 +216,15 @@ body {
   background:
     radial-gradient(
       ellipse 90% 55% at 50% -8%,
-      rgba(52, 128, 140, 0.28) 0%,
+      var(--page-glow-1) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 70% 50% at 88% 8%,
-      rgba(255, 145, 85, 0.08) 0%,
+      color-mix(in srgb, var(--accent) 8%, transparent) 0%,
       transparent 55%
     ),
-    linear-gradient(180deg, #081217 0%, var(--bg-0) 45%, #04090c 100%);
+    linear-gradient(180deg, var(--page-top) 0%, var(--bg-0) 45%, var(--page-bottom) 100%);
   background-attachment: fixed;
   /* Kills iOS rubber-banding, which otherwise exposes white behind the app. */
   overscroll-behavior: none;
@@ -130,7 +272,7 @@ input {
   font-size: clamp(2rem, 4vw, 2.75rem);
   letter-spacing: -0.03em;
   line-height: 1;
-  background: linear-gradient(100deg, #ffffff 10%, #8fd8d4 60%, #4fa8b8 100%);
+  background: linear-gradient(100deg, var(--brand-a) 10%, var(--brand-b) 60%, var(--brand-c) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -149,6 +291,42 @@ input {
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.45;
+}
+
+/* Groups the live readout and the theme control so they stay together at the
+   end of the app bar as the masthead copy drops away on small screens. */
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.theme-toggle {
+  appearance: none;
+  flex: none;
+  width: 2.35rem;
+  height: 2.35rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.theme-toggle svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  border-color: var(--line-hi);
+  background: var(--surface-hi);
 }
 
 /* Live readout that tracks the timeline — the app's "now" indicator. */
@@ -233,8 +411,8 @@ input {
 .panel {
   background: linear-gradient(
     180deg,
-    rgba(160, 200, 210, 0.075) 0%,
-    rgba(160, 200, 210, 0.03) 100%
+    rgba(var(--tint), var(--panel-tint-a)) 0%,
+    rgba(var(--tint), var(--panel-tint-b)) 100%
   );
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -354,7 +532,7 @@ input {
 }
 
 .scenario.active .scenario-warm {
-  color: var(--ink-dim, #c6d7da);
+  color: var(--ink-dim);
 }
 
 /* Small bar so pathways can be compared at a glance, not just read.
@@ -366,7 +544,7 @@ input {
   align-self: stretch;
   margin-top: 0.15rem;
   height: 3px;
-  background: rgba(160, 200, 210, 0.14);
+  background: rgba(var(--tint), 0.14);
   border-radius: 999px;
   overflow: hidden;
   position: relative;
@@ -440,29 +618,29 @@ input {
 }
 
 .plausibility.reference {
-  background: rgba(160, 200, 210, 0.12);
-  color: #a9c0c4;
-  border-color: rgba(160, 200, 210, 0.2);
+  background: rgba(var(--tint), 0.12);
+  color: var(--neutral-ink);
+  border-color: rgba(var(--tint), 0.2);
 }
 .plausibility.good {
-  background: rgba(79, 209, 147, 0.14);
-  color: #67dda6;
-  border-color: rgba(79, 209, 147, 0.3);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--good-ink);
+  border-color: color-mix(in srgb, var(--good) 30%, transparent);
 }
 .plausibility.likely {
-  background: rgba(70, 200, 194, 0.14);
-  color: #5fd6d0;
-  border-color: rgba(70, 200, 194, 0.3);
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  color: var(--teal-ink);
+  border-color: color-mix(in srgb, var(--teal) 30%, transparent);
 }
 .plausibility.high {
-  background: rgba(255, 145, 85, 0.14);
-  color: #ffa871;
-  border-color: rgba(255, 145, 85, 0.32);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 .plausibility.extreme {
-  background: rgba(255, 111, 92, 0.16);
-  color: #ff8877;
-  border-color: rgba(255, 111, 92, 0.36);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger-ink);
+  border-color: color-mix(in srgb, var(--danger) 36%, transparent);
 }
 
 /* --- Scenario families ---------------------------------------------------
@@ -652,7 +830,7 @@ input {
 
 .play-btn.playing {
   background: var(--teal);
-  color: #04191c;
+  color: var(--on-accent);
   border-color: var(--teal);
   box-shadow: 0 6px 20px -10px var(--teal);
 }
@@ -687,7 +865,7 @@ input[type='range']::-webkit-slider-runnable-track {
   background: linear-gradient(
     90deg,
     var(--sc, var(--teal)) 0 var(--pct, 50%),
-    rgba(160, 200, 210, 0.16) var(--pct, 50%) 100%
+    rgba(var(--tint), 0.16) var(--pct, 50%) 100%
   );
 }
 
@@ -699,9 +877,9 @@ input[type='range']::-webkit-slider-thumb {
   /* (track height - thumb height) / 2 */
   margin-top: -0.4rem;
   border-radius: 50%;
-  background: #f2fbfb;
+  background: var(--thumb);
   border: 2px solid var(--sc, var(--teal));
-  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 2px 10px -2px rgba(var(--shadow-rgb), 0.85);
   transition: transform 0.12s ease;
 }
 
@@ -712,7 +890,7 @@ input[type='range']:active::-webkit-slider-thumb {
 input[type='range']::-moz-range-track {
   height: 0.35rem;
   border-radius: 999px;
-  background: rgba(160, 200, 210, 0.16);
+  background: rgba(var(--tint), 0.16);
 }
 
 input[type='range']::-moz-range-progress {
@@ -725,9 +903,9 @@ input[type='range']::-moz-range-thumb {
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  background: #f2fbfb;
+  background: var(--thumb);
   border: 2px solid var(--sc, var(--teal));
-  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 2px 10px -2px rgba(var(--shadow-rgb), 0.85);
 }
 
 .year-ticks {
@@ -1035,7 +1213,7 @@ input[type='range']::-moz-range-thumb {
   width: 42%;
   max-width: 2.4rem;
   height: 7.5rem;
-  background: rgba(160, 200, 210, 0.12);
+  background: rgba(var(--tint), 0.12);
   border-radius: 0.35rem;
   display: flex;
   align-items: flex-end;
@@ -1049,15 +1227,15 @@ input[type='range']::-moz-range-thumb {
 }
 
 .ice-bar-fill.arctic {
-  background: linear-gradient(180deg, #eaf8fd 0%, #74b4d0 100%);
+  background: linear-gradient(180deg, var(--ice-arctic-a) 0%, var(--ice-arctic-b) 100%);
 }
 
 .ice-bar-fill.sheet {
-  background: linear-gradient(180deg, #ffffff 0%, #a8c2d2 100%);
+  background: linear-gradient(180deg, var(--ice-sheet-a) 0%, var(--ice-sheet-b) 100%);
 }
 
 .ice-bar-fill.warn {
-  background: linear-gradient(180deg, #ffc9a5 0%, var(--accent) 100%);
+  background: linear-gradient(180deg, var(--ice-warn-a) 0%, var(--accent) 100%);
 }
 
 .ice-bar-threshold {
@@ -1146,7 +1324,7 @@ input[type='range']::-moz-range-thumb {
 .bar-track {
   position: relative;
   height: 0.5rem;
-  background: rgba(160, 200, 210, 0.14);
+  background: rgba(var(--tint), 0.14);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -1158,11 +1336,11 @@ input[type='range']::-moz-range-thumb {
 }
 
 .bar-fill.arctic {
-  background: linear-gradient(90deg, #74b4d0, #bfe4f2);
+  background: linear-gradient(90deg, var(--bar-arctic-a), var(--bar-arctic-b));
 }
 
 .bar-fill.sheet {
-  background: linear-gradient(90deg, #a8c2d2, #eef6fa);
+  background: linear-gradient(90deg, var(--bar-sheet-a), var(--bar-sheet-b));
 }
 
 .bar-mark {
@@ -1224,7 +1402,7 @@ input[type='range']::-moz-range-thumb {
 }
 
 .risk-low { color: var(--teal); }
-.risk-elevated { color: #e8c07a; }
+.risk-elevated { color: var(--amber-ink); }
 .risk-high { color: var(--accent); }
 .risk-extreme { color: var(--danger); }
 
@@ -1310,15 +1488,15 @@ input[type='range']::-moz-range-thumb {
   text-transform: uppercase;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  background: rgba(160, 200, 210, 0.12);
+  background: rgba(var(--tint), 0.12);
   color: var(--muted);
 }
 
-.reading-kind.kind-tool { background: rgba(70, 200, 194, 0.16); color: #5fd6d0; }
-.reading-kind.kind-report { background: rgba(140, 160, 235, 0.16); color: #a3b3f2; }
-.reading-kind.kind-tracker { background: rgba(255, 145, 85, 0.16); color: #ffa871; }
-.reading-kind.kind-data { background: rgba(79, 209, 147, 0.16); color: #67dda6; }
-.reading-kind.kind-explainer { background: rgba(232, 192, 122, 0.16); color: #e8c07a; }
+.reading-kind.kind-tool { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--teal-ink); }
+.reading-kind.kind-report { background: rgba(140, 160, 235, 0.16); color: var(--indigo-ink); }
+.reading-kind.kind-tracker { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink); }
+.reading-kind.kind-data { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good-ink); }
+.reading-kind.kind-explainer { background: rgba(232, 192, 122, 0.16); color: var(--amber-ink); }
 
 .reading-blurb {
   font-size: 0.76rem;
@@ -1425,7 +1603,7 @@ input[type='range']::-moz-range-thumb {
   font-variant-numeric: tabular-nums;
 }
 
-.river-delta.rising { color: #5ec8ee; }
+.river-delta.rising { color: var(--sky-ink); }
 .river-delta.stable { color: var(--muted); }
 .river-delta.declining { color: var(--accent); }
 .river-delta.severe { color: var(--danger); }
@@ -1434,7 +1612,7 @@ input[type='range']::-moz-range-thumb {
   position: relative;
   display: block;
   height: 0.4rem;
-  background: rgba(160, 200, 210, 0.14);
+  background: rgba(var(--tint), 0.14);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -1446,7 +1624,7 @@ input[type='range']::-moz-range-thumb {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #cfe3e2;
+  background: var(--ink);
   opacity: 0.4;
   z-index: 1;
 }
@@ -1458,8 +1636,8 @@ input[type='range']::-moz-range-thumb {
   transition: width 0.25s ease;
 }
 
-.river-fill.rising { background: #5ec8ee; }
-.river-fill.stable { background: #7f989c; }
+.river-fill.rising { background: var(--sky-ink); }
+.river-fill.stable { background: var(--muted); }
 .river-fill.declining { background: var(--accent); }
 .river-fill.severe { background: var(--danger); }
 
@@ -1481,10 +1659,10 @@ input[type='range']::-moz-range-thumb {
   white-space: nowrap;
 }
 
-.river-pill.rising { background: rgba(94, 200, 238, 0.16); color: #7dd4f2; }
-.river-pill.stable { background: rgba(160, 200, 210, 0.12); color: var(--muted); }
-.river-pill.declining { background: rgba(255, 145, 85, 0.16); color: #ffa871; }
-.river-pill.severe { background: rgba(255, 111, 92, 0.18); color: #ff8877; }
+.river-pill.rising { background: rgba(94, 200, 238, 0.16); color: var(--sky-ink); }
+.river-pill.stable { background: rgba(var(--tint), 0.12); color: var(--muted); }
+.river-pill.declining { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-ink); }
+.river-pill.severe { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger-ink); }
 
 .river-detail {
   display: flex;
@@ -1669,14 +1847,14 @@ input[type='range']::-moz-range-thumb {
 .map-mode-switch button.active {
   color: var(--ink);
   background: var(--surface-max);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset,
-    0 4px 12px -8px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 1px 0 rgba(var(--hi-rgb), 0.07) inset,
+    0 4px 12px -8px rgba(var(--shadow-rgb), 0.9);
 }
 
 .rain-wet {
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-  color: #5ec8ee;
+  color: var(--sky-ink);
 }
 
 .rain-dry {
@@ -1713,7 +1891,7 @@ th {
   text-align: left;
   padding: 0.55rem 0.65rem;
   /* Opaque: a sticky header over translucent rows would smear as it scrolls. */
-  background: #101b21;
+  background: var(--thead-bg);
   color: var(--muted);
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -1752,7 +1930,7 @@ th {
 
 td {
   padding: 0.55rem 0.65rem;
-  border-top: 1px solid rgba(150, 190, 200, 0.09);
+  border-top: 1px solid rgba(var(--line-rgb), 0.09);
 }
 
 tbody tr {
@@ -1810,14 +1988,52 @@ tbody tr.active {
   }
 }
 
-/* Sheet grabber — the affordance that says "this panel slides over the globe". */
+/* Sheet grabber — the affordance that says "this panel slides over the globe",
+   and the control that drops it to a peek so the map gets the screen. The hit
+   area is the full width of the sheet header and 44px tall; the visible pill is
+   only the middle of it, because a 4px target is not a target. */
 .deck-grip {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  width: 100%;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+  margin-bottom: -0.9rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.deck-grip-bar {
   width: 2.4rem;
   height: 0.25rem;
   border-radius: 999px;
   background: var(--line-hi);
-  margin: 0.5rem auto 0.15rem;
-  flex: none;
+  transition: background 0.18s, width 0.18s;
+}
+
+.deck-grip:hover .deck-grip-bar,
+.deck-grip:focus-visible .deck-grip-bar {
+  background: var(--sc, var(--teal));
+  width: 3rem;
+}
+
+/* Visually hidden but read aloud — the grip's only label. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Always-visible transport docked in the sheet header, so the timeline can be
@@ -1853,7 +2069,7 @@ tbody tr.active {
 
 .scrub-play.playing {
   background: var(--sc, var(--teal));
-  color: #04191c;
+  color: var(--on-accent);
   box-shadow: 0 6px 20px -10px var(--sc, var(--teal));
 }
 
@@ -1910,12 +2126,12 @@ tbody tr.active {
   padding: 0.3rem;
   border-radius: var(--r-lg);
   /* Mostly opaque so the bar still reads if backdrop-filter is unsupported. */
-  background: rgba(10, 20, 26, 0.9);
+  background: var(--tabbar-bg);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   backdrop-filter: blur(20px) saturate(1.6);
   border: 1px solid var(--line);
-  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.95),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  box-shadow: 0 14px 34px -14px rgba(var(--shadow-rgb), 0.95),
+    0 1px 0 rgba(var(--hi-rgb), 0.05) inset;
 }
 
 .tabbar-btn {
@@ -1991,6 +2207,7 @@ tbody tr.active {
 @media (max-width: 760px) {
   .app {
     --pad: 0.85rem;
+    --stage-h: 44dvh;
     padding: 0.6rem var(--pad) calc(5.4rem + env(safe-area-inset-bottom));
     padding-left: max(var(--pad), env(safe-area-inset-left));
     padding-right: max(var(--pad), env(safe-area-inset-right));
@@ -2016,7 +2233,12 @@ tbody tr.active {
 
   .live-chip {
     display: inline-flex;
-    margin-left: auto;
+  }
+
+  /* Full 44px on touch, where the app bar has the room for it. */
+  .theme-toggle {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .layout {
@@ -2033,12 +2255,38 @@ tbody tr.active {
     top: 0;
     z-index: 4;
     min-height: 0;
-    height: 44vh;
-    height: 44dvh;
+    height: var(--stage-h);
     margin-inline: calc(var(--pad) * -1);
     border-inline: none;
     border-top: none;
     border-radius: 0 0 var(--r-xl) var(--r-xl);
+    transition: height 0.32s cubic-bezier(0.22, 0.9, 0.3, 1);
+  }
+
+  /* Collapsed: the sheet keeps its grip and its scrubber, and hands the rest of
+     the screen to the globe. Scrubbing the timeline is exactly what you want to
+     do while looking at the map, so the transport is the one thing that stays. */
+  .app[data-deck='peek'] {
+    --stage-h: 72dvh;
+  }
+
+  .app[data-deck='peek'] .deck-body {
+    display: none;
+  }
+
+  .app[data-deck='peek'] .deck {
+    min-height: 0;
+  }
+
+  .app[data-deck='peek'] .deck-grip-bar {
+    width: 3.2rem;
+    background: var(--sc, var(--teal));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage {
+      transition: none;
+    }
   }
 
   /* The panel deck becomes a bottom sheet riding over the pinned globe. */
@@ -2047,10 +2295,10 @@ tbody tr.active {
     z-index: 5;
     margin: -1.1rem calc(var(--pad) * -1) 0;
     padding: 0 var(--pad) 0.5rem;
-    background: linear-gradient(180deg, #0d181e 0%, var(--bg-0) 30%);
+    background: linear-gradient(180deg, var(--sheet-top) 0%, var(--bg-0) 30%);
     border-top: 1px solid var(--line);
     border-radius: var(--r-xl) var(--r-xl) 0 0;
-    box-shadow: 0 -20px 44px -22px rgba(0, 0, 0, 0.95);
+    box-shadow: 0 -20px 44px -22px rgba(var(--shadow-rgb), 0.95);
     min-height: 60vh;
   }
 
