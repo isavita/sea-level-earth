@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import Globe, { type GlobeMethods } from 'react-globe.gl'
 import { geoCentroid } from 'd3-geo'
 import { fractionLostAtRise } from '../lib/landLoss'
@@ -141,17 +148,33 @@ export function EarthGlobe({
   const containerRef = useRef<HTMLDivElement>(null)
   const { features, loading } = useCountries()
   const isMobile = useIsMobile()
-  const [dims, setDims] = useState({ w: 800, h: 600 })
+  /**
+   * Null until the stage has been measured. Mounting the globe at a guessed
+   * size and letting the observer correct it left the first frame rendered
+   * against the wrong viewport — the Earth sat half off the right edge until
+   * something else triggered a resize. Measuring in a layout effect means the
+   * globe is built once, at the size it will actually occupy.
+   */
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
   const [hoverId, setHoverId] = useState<string | null>(null)
+  const [labelsReady, setLabelsReady] = useState(false)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
+    // Floor kept below the narrowest phone (320px minus page padding) so the
+    // canvas never forces its container to overflow and crop the globe.
+    const measure = (width: number, height: number) => {
+      const next = { w: Math.max(240, width), h: Math.max(240, height) }
+      setDims((prev) =>
+        prev && prev.w === next.w && prev.h === next.h ? prev : next,
+      )
+    }
+    const rect = el.getBoundingClientRect()
+    measure(rect.width, rect.height)
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
-      // Floor kept below the narrowest phone (320px minus page padding) so the
-      // canvas never forces its container to overflow and crop the globe.
-      setDims({ w: Math.max(240, width), h: Math.max(240, height) })
+      measure(width, height)
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -174,16 +197,46 @@ export function EarthGlobe({
   // devicePixelRatio is often 3. Re-apply whenever the canvas is resized.
   useEffect(() => {
     const g = globeRef.current
-    if (!g) return
+    if (!g || !dims) return
     const renderer = g.renderer()
     if (!renderer) return
     const cap = isMobile ? 1.5 : 2
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap))
-    // Re-apply size (default updateStyle=true, matching react-globe.gl) so the
-    // capped pixel ratio takes effect on the current buffer without desyncing
-    // the canvas CSS size.
+    // setPixelRatio resizes the drawing buffer but leaves the CSS size alone,
+    // so re-apply the size (default updateStyle=true, matching react-globe.gl)
+    // to keep buffer and element in step.
     renderer.setSize(dims.w, dims.h)
+    // setSize does not touch the camera, and a stale aspect skews the globe.
+    const camera = g.camera() as { aspect?: number; updateProjectionMatrix?: () => void }
+    if (typeof camera.aspect === 'number') {
+      camera.aspect = dims.w / dims.h
+      camera.updateProjectionMatrix?.()
+    }
   }, [dims, isMobile, features.length])
+
+  /**
+   * Hold the labels back until the globe itself is on screen.
+   *
+   * Every label is extruded 3D text, and three-globe builds all of them in the
+   * same task that triangulates the countries. Letting the first paint carry
+   * both put the whole set behind one long block; deferring to the first idle
+   * slot gets the map up first and fills the numbers in a beat later, which is
+   * also the order a reader wants them.
+   */
+  useEffect(() => {
+    if (!dims || features.length === 0) return
+    const show = () => setLabelsReady(true)
+    // A timer cannot interrupt the geometry build — it can only run once that
+    // task yields — so this already lands in the right order. It is the backstop
+    // rather than the mechanism because idle callbacks are suspended outright in
+    // a background tab, and the labels must still arrive there.
+    const timer = window.setTimeout(show, 400)
+    const handle = window.requestIdleCallback?.(show, { timeout: 1200 })
+    return () => {
+      window.clearTimeout(timer)
+      if (handle !== undefined) window.cancelIdleCallback?.(handle)
+    }
+  }, [dims, features.length])
 
   // Pause the render loop entirely when the tab is hidden (battery saver).
   useEffect(() => {
@@ -294,7 +347,7 @@ export function EarthGlobe({
    * 24 keeps the largest countries counting up — the ones whose labels are
    * legible at play-through zoom anyway — for roughly a third of the cost.
    */
-  const labelBudget = playing ? (isMobile ? 0 : 24) : 150
+  const labelBudget = !labelsReady ? 0 : playing ? (isMobile ? 0 : 24) : 150
 
   /**
    * Label geometry dominates the frame budget: measured over a play-through,
@@ -482,7 +535,7 @@ export function EarthGlobe({
 
   return (
     <div ref={containerRef} className="globe-stage">
-      {loading || features.length === 0 ? (
+      {loading || features.length === 0 || !dims ? (
         <div className="globe-loading">Loading Earth…</div>
       ) : (
         <Globe

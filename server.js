@@ -3,7 +3,12 @@
 // the port Railway provides via $PORT. No framework, nothing to keep patched.
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
-import { gzipSync } from 'node:zlib'
+import {
+  gzipSync,
+  brotliCompress,
+  brotliCompressSync,
+  constants as zlibConstants,
+} from 'node:zlib'
 import { join, normalize, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,17 +36,61 @@ const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg', '.txt'])
 // Cache the raw + gzipped bytes of each served file for the process lifetime.
 const cache = new Map()
 
+/**
+ * Brotli quality is a sharp trade-off on the big Three.js chunk: q9 takes 69 ms
+ * and beats gzip by 14%, q11 takes 3.6 s and beats it by 22%. So each file gets
+ * q9 up front — cheap enough to sit in the request path — and is then upgraded
+ * to q11 in the background, off the event loop. Requests that land before the
+ * upgrade finishes are still served brotli, just the slightly larger one.
+ */
+function upgradeToMaxBrotli(entry, raw) {
+  brotliCompress(
+    raw,
+    {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: raw.length,
+      },
+    },
+    (err, out) => {
+      if (!err && out && out.length < entry.brotli.length) entry.brotli = out
+    },
+  )
+}
+
 async function load(path) {
   if (cache.has(path)) return cache.get(path)
   const raw = await readFile(path)
   const ext = extname(path)
+  const compressible = COMPRESSIBLE.has(ext)
   const entry = {
     raw,
-    gzip: COMPRESSIBLE.has(ext) ? gzipSync(raw, { level: 8 }) : null,
+    gzip: compressible ? gzipSync(raw, { level: 8 }) : null,
+    brotli: compressible
+      ? brotliCompressSync(raw, {
+          params: {
+            [zlibConstants.BROTLI_PARAM_QUALITY]: 9,
+            [zlibConstants.BROTLI_PARAM_SIZE_HINT]: raw.length,
+          },
+        })
+      : null,
     type: MIME[ext] ?? 'application/octet-stream',
   }
   cache.set(path, entry)
+  if (entry.brotli) upgradeToMaxBrotli(entry, raw)
   return entry
+}
+
+/** Pick the best encoding the client actually asked for. */
+function negotiate(entry, acceptEncoding) {
+  const accept = acceptEncoding || ''
+  if (entry.brotli && /\bbr\b/.test(accept)) {
+    return { body: entry.brotli, encoding: 'br' }
+  }
+  if (entry.gzip && /\bgzip\b/.test(accept)) {
+    return { body: entry.gzip, encoding: 'gzip' }
+  }
+  return { body: entry.raw, encoding: null }
 }
 
 function cacheControl(urlPath) {
@@ -91,15 +140,14 @@ const server = createServer(async (req, res) => {
       return
     }
 
-    const wantsGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '')
-    const body = wantsGzip && entry.gzip ? entry.gzip : entry.raw
+    const { body, encoding } = negotiate(entry, req.headers['accept-encoding'])
     const headers = {
       'content-type': entry.type,
       'content-length': body.length,
       'cache-control': cacheControl(urlPath),
       vary: 'Accept-Encoding',
     }
-    if (wantsGzip && entry.gzip) headers['content-encoding'] = 'gzip'
+    if (encoding) headers['content-encoding'] = encoding
 
     res.writeHead(200, headers)
     res.end(req.method === 'HEAD' ? undefined : body)

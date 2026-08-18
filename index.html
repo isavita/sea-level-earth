@@ -17,12 +17,38 @@
       content="Interactive 3D Earth: watch sea level, polar ice, rivers and every country's temperature change under six warming pathways through 2300."
     />
     <title>Meridian — Sea level, ice & borders</title>
+
+    <!--
+      The globe needs these two files before it can draw anything, and nothing
+      else on the page needs them at all. Left to the module graph they were not
+      requested until the entry chunk had downloaded and executed — measured at
+      756 ms on a throttled phone profile, with the map's own 240 KB starting
+      from there. Preloading hands them to the network during HTML parse
+      instead, so they arrive alongside the JS rather than after it.
+    -->
+    <link rel="preload" href="/countries-50m.json" as="fetch" crossorigin />
+    <link rel="preload" href="/country-risk.json" as="fetch" crossorigin />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Loaded without blocking the first paint: as a plain stylesheet this sat on
+      the critical path behind a DNS lookup and TLS handshake to another origin,
+      delaying the whole shell. `display=swap` already means text paints in the
+      fallback face first, so nothing is lost by letting it land late.
+    -->
     <link
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>
