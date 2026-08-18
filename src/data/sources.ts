@@ -77,6 +77,41 @@ export const READING_GROUPS: ReadingGroup[] = [
     ],
   },
   {
+    heading: 'Where the models and the measurements disagree',
+    intro:
+      'The Earth-system pathways in this app come from here — places the last two decades of observation sit awkwardly against the projections.',
+    links: [
+      {
+        title: 'NASA CERES — Earth’s radiation budget',
+        href: 'https://ceres.larc.nasa.gov/',
+        kind: 'Data',
+        blurb:
+          'The satellite record behind the albedo story: how much sunlight the planet reflects and how much heat it keeps, measured directly. The growing energy imbalance shows up here first.',
+      },
+      {
+        title: 'Copernicus — Earth’s energy budget and albedo',
+        href: 'https://climate.copernicus.eu/',
+        kind: 'Data',
+        blurb:
+          'Monthly bulletins tracking the record-warm years and the cloud and sea-ice changes that accompanied them — the observational side of the “darkening Earth” pathway.',
+      },
+      {
+        title: 'RAPID — Atlantic overturning observations',
+        href: 'https://rapid.ac.uk/',
+        kind: 'Data',
+        blurb:
+          'The mooring array that has measured the Atlantic overturning circulation continuously since 2004. The only direct check on whether the circulation behind the “Atlantic stalls” pathway is actually weakening.',
+      },
+      {
+        title: 'Global Carbon Project — the annual carbon budget',
+        href: 'https://globalcarbonproject.org/',
+        kind: 'Report',
+        blurb:
+          'How much carbon land and ocean actually absorbed each year. The source for the sink weakening behind the “Sinks give way” pathway, including the anomalous 2023 land sink.',
+      },
+    ],
+  },
+  {
     heading: 'Watch it happen',
     intro: 'Monitoring programmes publishing what the planet is doing now.',
     links: [
@@ -122,6 +157,22 @@ export const MODEL_NOTES: ModelNote[] = [
   {
     title: 'Warming pathways',
     body: 'Each pathway is a curve of global mean temperature and sea level through anchor years (2020, 2030, 2050, 2100, 2150, 2300), interpolated in between. The values are shaped to IPCC AR6 central estimates; the 6°C and 8°C paths sit deliberately beyond the assessed ranges as stress tests.',
+  },
+  {
+    title: 'Earth-system pathways',
+    body: 'A second family that holds emissions near the current-policy trend and varies how the planet responds instead. Each one is built on a place where the last two decades of observation sit awkwardly against the models: a planet reflecting less sunlight, reflective pollution being cleaned up faster than the CO₂ beneath it decays, carbon sinks weakening, and an Atlantic circulation that models hold more stable than the evidence supports. They change where the warming lands as well as how much there is, so the map genuinely redraws — most visibly under a stalled Atlantic, the one mechanism here that can leave a region colder than it started.',
+  },
+  {
+    title: 'Reflected sunlight',
+    body: 'Earth’s energy imbalance roughly doubled between 2005 and 2019, and the larger share came from the planet reflecting less sunlight rather than trapping more heat — 2023 then set a record-low planetary albedo, traced mainly to retreating low cloud. In this app that shows up as extra warming weighted to where the bright surfaces are: the Arctic sea-ice margin and northern snow line take most of it, the northern mid-latitudes pick up the cloud signal, and the Antarctic sea-ice zone gets a smaller share because the Southern Ocean carries the heat downward instead.',
+  },
+  {
+    title: 'Aerosol unmasking',
+    body: 'Sulphate pollution reflects sunlight and brightens marine cloud, hiding part of the warming already committed by the CO₂ emitted alongside it. Cutting it — the 2020 marine fuel sulphur cap, East Asian air-quality policy — removes that shield far faster than the CO₂ decays. Modelled here as extra warming over the regions that carried the haze: East and South Asia, Europe, eastern North America and the busiest shipping lanes.',
+  },
+  {
+    title: 'Atlantic overturning',
+    body: 'The only mechanism modelled here that can make somewhere colder in a warming world. It is applied as an absolute cooling rather than a multiplier, because a fraction of a positive global mean can never produce a region that ends up below where it started. Magnitudes follow the collapse literature — strongest over the Nordic seas and Iceland, several degrees over Britain, Ireland and Scandinavia, tapering across western Europe. The same slowdown banks water against north-east North America, measured to the nearest point of a country’s coastline rather than its centroid, since the effect falls off within roughly 1,300 km and most large countries have their middle a long way inland.',
   },
   {
     title: 'Country temperature',

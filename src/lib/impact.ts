@@ -1,6 +1,7 @@
 import type { CountryFeature } from './countries'
 import { computeLoss } from './landLoss'
 import { estimateCountryTemp } from './warming'
+import type { ScenarioPhysics } from './earthSystem'
 import { estimateCountryRain } from './rain'
 import { localSeaLevel } from './regionalSeaLevel'
 
@@ -16,6 +17,13 @@ export interface SeaLevelContext {
   globalMeanM: number
   year: number
   iceSheetInstability: boolean
+  /**
+   * Earth-system responses for the active pathway. They reshape both the
+   * warming pattern and, through the Atlantic circulation, the sea-level one —
+   * so they travel with the rest of the scenario context rather than as a
+   * separate argument threaded through every signature.
+   */
+  physics: ScenarioPhysics
 }
 
 export interface CountryImpactRow {
@@ -62,12 +70,13 @@ export function rankByImpact(
       sea.globalMeanM,
       sea.year,
       sea.iceSheetInstability,
+      sea.physics.amocWeakening,
     )
     const loss = f.__risk
       ? computeLoss(f.__risk, local.riseM, f.__areaKm2)
       : null
-    const temp = estimateCountryTemp(f, warmingC)
-    const rain = estimateCountryRain(f, warmingC)
+    const temp = estimateCountryTemp(f, warmingC, sea.physics)
+    const rain = estimateCountryRain(f, warmingC, sea.physics)
     const areaKm2 = loss?.areaKm2 ?? f.__areaKm2 ?? 0
     if (areaKm2 <= 0) continue
     rows.push({

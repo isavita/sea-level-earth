@@ -149,14 +149,73 @@ export function fingerprintFactor(
   )
 }
 
+/** Where a slowing overturning circulation banks water against the shore. */
+const AMOC_SEA_LEVEL_CENTRE = { lat: 42, lng: -68 }
+
 /**
  * Dynamic sea level from a slowing Atlantic overturning circulation, which
  * banks water against the US north-east and Atlantic Canada. Expressed as a
  * share of the global mean rise.
+ *
+ * `amocWeakening` scales the effect from the modest slowdown already expected
+ * under any warming pathway up to a full collapse, which the hosing literature
+ * puts at tens of extra centimetres along that coast — enough to change who
+ * loses land, which is why it is worth carrying through the scenario.
+ *
+ * `distanceKm` is measured to the nearest point of the country's *outline*, not
+ * to its centroid. The rest of this module can use centroids because
+ * gravitational fingerprints vary smoothly over many thousands of kilometres,
+ * but this effect has a ~1,300 km scale, and the United States' centroid sits in
+ * Kansas — far enough inland to erase the very signal the pathway exists to
+ * show. Asking how close a country actually gets to the affected water is both
+ * cheaper and more honest than pretending it is all at its middle.
  */
-export function dynamicFactor(lat: number, lng: number): number {
-  const d = greatCircleKm(lat, lng, 42, -68)
-  return 0.2 * Math.exp(-((d / 1200) ** 2))
+export function dynamicFactor(distanceKm: number, amocWeakening = 0): number {
+  const strength = 0.2 + 0.75 * Math.max(0, Math.min(1, amocWeakening))
+  return strength * Math.exp(-((distanceKm / 1300) ** 2))
+}
+
+/**
+ * Great-circle distance from a target to the closest vertex of a country's
+ * outline. Vertices are subsampled — at 1:50m resolution neighbouring points are
+ * a kilometre or two apart, which is far finer than a 1,300 km falloff needs.
+ */
+function nearestOutlineKm(
+  feature: CountryFeature,
+  lat: number,
+  lng: number,
+): number {
+  const g = feature.geometry
+  if (g.type !== 'Polygon' && g.type !== 'MultiPolygon') {
+    const c = centroidOf(feature)
+    return greatCircleKm(c.lat, c.lng, lat, lng)
+  }
+  const parts = g.type === 'Polygon' ? [g.coordinates] : g.coordinates
+  let best = Infinity
+  for (const part of parts) {
+    const ring = part[0]
+    if (!ring) continue
+    const step = Math.max(1, Math.floor(ring.length / 64))
+    for (let i = 0; i < ring.length; i += step) {
+      const d = greatCircleKm(ring[i][1], ring[i][0], lat, lng)
+      if (d < best) best = d
+    }
+  }
+  return Number.isFinite(best) ? best : Infinity
+}
+
+const amocDistanceCache = new WeakMap<CountryFeature, number>()
+
+function amocDistanceKm(feature: CountryFeature): number {
+  const cached = amocDistanceCache.get(feature)
+  if (cached !== undefined) return cached
+  const d = nearestOutlineKm(
+    feature,
+    AMOC_SEA_LEVEL_CENTRE.lat,
+    AMOC_SEA_LEVEL_CENTRE.lng,
+  )
+  amocDistanceCache.set(feature, d)
+  return d
 }
 
 /**
@@ -222,6 +281,8 @@ export interface LocalSeaLevel {
   ratio: number
   /** Gravitational + dynamic multiplier, before land motion. */
   factor: number
+  /** The ocean-dynamics share of that factor, so callers can explain it. */
+  dynamic: number
   /** Vertical land motion, mm/yr; positive = sinking. */
   vlmMmPerYr: number
 }
@@ -250,13 +311,14 @@ export function localSeaLevel(
   globalMeanM: number,
   year: number,
   iceSheetInstability: boolean,
+  amocWeakening = 0,
 ): LocalSeaLevel {
   const { lat, lng } = centroidOf(feature)
   const iso3 = feature.__risk?.iso3 ?? null
   const vlmMmPerYr = (iso3 && VERTICAL_LAND_MOTION_MM_YR[iso3]) || 0
 
-  const factor =
-    fingerprintFactor(lat, lng, iceSheetInstability) + dynamicFactor(lat, lng)
+  const dynamic = dynamicFactor(amocDistanceKm(feature), amocWeakening)
+  const factor = fingerprintFactor(lat, lng, iceSheetInstability) + dynamic
   const landMotionM =
     (vlmMmPerYr / 1000) * Math.max(0, year - SLR_BASELINE_YEAR)
   const riseM = globalMeanM * factor + landMotionM
@@ -265,12 +327,16 @@ export function localSeaLevel(
     riseM,
     ratio: globalMeanM > 0 ? riseM / globalMeanM : 1,
     factor,
+    dynamic,
     vlmMmPerYr,
   }
 }
 
 /** Short human note on why a coast departs from the global mean. */
 export function seaLevelNote(local: LocalSeaLevel): string | null {
+  if (local.dynamic >= 0.35) {
+    return 'A stalling Atlantic circulation banks water against this coast, on top of the global rise.'
+  }
   if (local.vlmMmPerYr <= -2) {
     return 'Land is still rebounding from the last ice age faster than the sea is rising.'
   }

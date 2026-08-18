@@ -12,7 +12,12 @@ import { fractionLostAtRise } from '../lib/landLoss'
 import { lossColor } from '../lib/countries'
 import { useCountries } from '../lib/CountriesContext'
 import type { CountryFeature } from '../lib/countries'
-import { estimateCountryTemp, tempColor, TEMP_LEGEND } from '../lib/warming'
+import {
+  estimateCountryTemp,
+  formatAbsoluteC,
+  tempColor,
+  TEMP_LEGEND,
+} from '../lib/warming'
 import {
   estimateCountryRain,
   formatDeltaFrac,
@@ -321,13 +326,14 @@ export function EarthGlobe({
         sea.globalMeanM,
         sea.year,
         sea.iceSheetInstability,
+        sea.physics.amocWeakening,
       ).riseM
       const frac = f.__risk ? fractionLostAtRise(f.__risk, localM) : 0
       const areaKm2 = f.__areaKm2 ?? 0
-      const rain = estimateCountryRain(f, warmingC)
+      const rain = estimateCountryRain(f, warmingC, sea.physics)
       m.set(f.properties.id, {
         frac,
-        absoluteC: estimateCountryTemp(f, warmingC).absoluteC,
+        absoluteC: estimateCountryTemp(f, warmingC, sea.physics).absoluteC,
         areaLostKm2: areaKm2 * frac,
         futureMm: rain.futureMm,
         deltaMm: rain.deltaMm,
@@ -384,7 +390,7 @@ export function EarthGlobe({
           name: f.properties.name,
           lat: meta.lat,
           lng: meta.lng,
-          text: `+${absoluteC.toFixed(coarse ? 0 : 1)}°`,
+          text: `${formatAbsoluteC(absoluteC, coarse ? 0 : 1)}°`,
           areaKm2: meta.areaKm2,
           light: isLightText(absoluteC),
         })

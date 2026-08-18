@@ -1,5 +1,10 @@
 import { geoCentroid } from 'd3-geo'
 import type { CountryFeature } from './countries'
+import {
+  amocRainfallShift,
+  NEUTRAL_PHYSICS,
+  type ScenarioPhysics,
+} from './earthSystem'
 
 /**
  * Illustrative precipitation model:
@@ -107,6 +112,17 @@ function regionalSensAdjust(lat: number, lng: number): number {
  * Fractional precip change per °C of *extra* warming above ~2020s (~1.15°C).
  * Positive = wetter. AR6-shaped sketch, not a GCM downscale.
  */
+/** Centroid accessors, guarded against the degenerate geometries. */
+function safeLat(feature: CountryFeature): number {
+  const [, lat] = geoCentroid(feature)
+  return Number.isFinite(lat) ? lat : 0
+}
+
+function safeLng(feature: CountryFeature): number {
+  const [lng] = geoCentroid(feature)
+  return Number.isFinite(lng) ? lng : 0
+}
+
 export function precipSensitivityPerC(feature: CountryFeature): number {
   const [lng, lat] = geoCentroid(feature)
   const safeLat = lat || 0
@@ -119,6 +135,7 @@ export function precipSensitivityPerC(feature: CountryFeature): number {
 export function estimateCountryRain(
   feature: CountryFeature,
   globalWarmingC: number,
+  physics: ScenarioPhysics = NEUTRAL_PHYSICS,
   baselineGlobalC = 1.15,
 ): CountryRain {
   const observed = feature.__risk?.precipMm
@@ -131,7 +148,15 @@ export function estimateCountryRain(
   const sens = precipSensitivityPerC(feature)
   // Soften extreme relative swings for very dry countries
   const damp = baselineMm < 200 ? 0.6 : baselineMm < 400 ? 0.8 : 1
-  const deltaFrac = sens * extraWarming * damp
+  // A stalling Atlantic circulation drags the tropical rain belt south, which
+  // is a shift in *where* the rain falls rather than a response to warming — so
+  // it is added on top rather than scaled by the temperature change.
+  const circulation = amocRainfallShift(
+    safeLat(feature),
+    safeLng(feature),
+    physics.amocWeakening,
+  )
+  const deltaFrac = sens * extraWarming * damp + circulation
   const futureMm = Math.max(5, baselineMm * (1 + deltaFrac))
   const deltaMm = futureMm - baselineMm
 

@@ -37,7 +37,17 @@ export interface IceState {
   paceNote: string
 }
 
-/** Approximate first September ice-free year by scenario (ensemble-central illustrative). */
+/**
+ * Approximate first September ice-free year by scenario (ensemble-central
+ * illustrative).
+ *
+ * The Earth-system pathways cluster earlier than their 2100 warming alone would
+ * suggest, because the mechanisms that define them act on the ice first: a
+ * darker surface, a thinner aerosol haze over the northern hemisphere and
+ * thawing permafrost all land in the Arctic. The exception is a stalled Atlantic
+ * circulation, which slows the northward heat transport that has been eroding
+ * the ice from below, and so buys the sea ice a couple of decades.
+ */
 const FIRST_ICE_FREE: Record<ScenarioId, number | null> = {
   baseline: null,
   ssp126: 2048,
@@ -45,6 +55,11 @@ const FIRST_ICE_FREE: Record<ScenarioId, number | null> = {
   ssp585: 2035,
   hot6: 2032,
   runaway: 2030,
+  unmasking: 2036,
+  dimming: 2034,
+  sinks: 2037,
+  amoc: 2052,
+  compound: 2033,
 }
 
 /**

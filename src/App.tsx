@@ -96,8 +96,9 @@ function AppShell() {
       globalMeanM: seaLevelM,
       year,
       iceSheetInstability: scenario.iceSheetInstability,
+      physics: scenario.physics,
     }),
-    [seaLevelM, year, scenario.iceSheetInstability],
+    [seaLevelM, year, scenario.iceSheetInstability, scenario.physics],
   )
 
   // Rivers only draw on the globe in the rain view, so picking one switches

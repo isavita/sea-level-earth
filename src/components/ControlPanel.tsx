@@ -1,10 +1,12 @@
 import {
   SCENARIOS,
+  SCENARIO_GROUPS,
   SCENARIO_ORDER,
   YEAR_MAX,
   YEAR_MIN,
   type ScenarioId,
 } from '../data/scenarios'
+import { forcingSummary } from '../lib/earthSystem'
 
 interface ControlPanelProps {
   scenarioId: ScenarioId
@@ -41,6 +43,7 @@ export function ControlPanel({
   const scenario = SCENARIOS[scenarioId]
   const atEnd = year >= YEAR_MAX
   const yearPct = ((year - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100
+  const forcings = forcingSummary(scenario.physics)
 
   return (
     <section className="panel controls">
@@ -50,35 +53,46 @@ export function ControlPanel({
       </header>
 
       {/* Radiogroup, not a tablist: these pick a value, they don't reveal
-          panels, and role="tab" without a tabpanel is an invalid pattern. */}
-      <div
-        className="scenario-switch multi"
-        role="radiogroup"
-        aria-label="Climate scenario"
-      >
-        {SCENARIO_ORDER.map((id) => {
-          const s = SCENARIOS[id]
-          const active = id === scenarioId
-          const share = (s.warmingByYear[2100] / MAX_2100_C) * 100
-          return (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              className={active ? 'scenario active' : 'scenario'}
-              onClick={() => onScenario(id)}
-              style={{ ['--sc' as string]: s.color }}
-            >
-              <span className="scenario-label">{s.shortLabel}</span>
-              <span className="scenario-warm">{s.warmingLabel}</span>
-              <span className="scenario-bar" aria-hidden>
-                <i style={{ width: `${share}%` }} />
-              </span>
-            </button>
-          )
-        })}
-      </div>
+          panels, and role="tab" without a tabpanel is an invalid pattern.
+          One group per family — an Earth-system pathway read as "more
+          emissions" would be read backwards, since most of them run on the
+          current-policy trend. */}
+      {SCENARIO_GROUPS.map((group) => (
+        <div className="scenario-group" key={group.id}>
+          <div className="scenario-group-head">
+            <h3 id={`sgroup-${group.id}`}>{group.label}</h3>
+            <p>{group.blurb}</p>
+          </div>
+          <div
+            className="scenario-switch multi"
+            role="radiogroup"
+            aria-labelledby={`sgroup-${group.id}`}
+          >
+            {group.ids.map((id) => {
+              const s = SCENARIOS[id]
+              const active = id === scenarioId
+              const share = (s.warmingByYear[2100] / MAX_2100_C) * 100
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={active ? 'scenario active' : 'scenario'}
+                  onClick={() => onScenario(id)}
+                  style={{ ['--sc' as string]: s.color }}
+                >
+                  <span className="scenario-label">{s.shortLabel}</span>
+                  <span className="scenario-warm">{s.warmingLabel}</span>
+                  <span className="scenario-bar" aria-hidden>
+                    <i style={{ width: `${share}%` }} />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
 
       {/* Controls come before the reading material: on a phone the play button
           used to sit below two long bullet lists. */}
@@ -151,7 +165,21 @@ export function ControlPanel({
           </span>
         </div>
         <p className="scenario-desc">{scenario.description}</p>
+        {forcings.length > 0 && (
+          <ul className="forcing-chips" aria-label="Earth-system mechanisms active">
+            {forcings.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        )}
       </div>
+
+      {scenario.evidence && (
+        <details className="scenario-details evidence">
+          <summary>Why this is on the list</summary>
+          <p>{scenario.evidence}</p>
+        </details>
+      )}
 
       <details className="scenario-details" open>
         <summary>What this world looks like by 2100</summary>

@@ -6,7 +6,11 @@ import {
 } from '../lib/landLoss'
 import { useCountries } from '../lib/CountriesContext'
 import type { CountryFeature } from '../lib/countries'
-import { estimateCountryTemp, formatDeltaC } from '../lib/warming'
+import {
+  estimateCountryTemp,
+  formatAbsoluteC,
+  formatDeltaC,
+} from '../lib/warming'
 import {
   estimateCountryRain,
   formatDeltaFrac,
@@ -55,8 +59,8 @@ export function StatsPanel({
     let driestDelta = Infinity
     for (const f of features) {
       if (!f.__areaKm2) continue
-      const temp = estimateCountryTemp(f, warmingC)
-      const rain = estimateCountryRain(f, warmingC)
+      const temp = estimateCountryTemp(f, warmingC, sea.physics)
+      const rain = estimateCountryRain(f, warmingC, sea.physics)
       hottest = Math.max(hottest, temp.absoluteC)
       wettestDelta = Math.max(wettestDelta, rain.deltaFrac)
       driestDelta = Math.min(driestDelta, rain.deltaFrac)
@@ -66,6 +70,7 @@ export function StatsPanel({
         sea.globalMeanM,
         sea.year,
         sea.iceSheetInstability,
+        sea.physics.amocWeakening,
       )
       const row = computeLoss(f.__risk, local.riseM, f.__areaKm2)
       if (!row) continue
@@ -88,6 +93,7 @@ export function StatsPanel({
       sea.globalMeanM,
       sea.year,
       sea.iceSheetInstability,
+      sea.physics.amocWeakening,
     )
   }, [selected, sea])
 
@@ -98,13 +104,13 @@ export function StatsPanel({
 
   const selectedTemp = useMemo(() => {
     if (!selected) return null
-    return estimateCountryTemp(selected, warmingC)
-  }, [selected, warmingC])
+    return estimateCountryTemp(selected, warmingC, sea.physics)
+  }, [selected, warmingC, sea])
 
   const selectedRain = useMemo(() => {
     if (!selected) return null
-    return estimateCountryRain(selected, warmingC)
-  }, [selected, warmingC])
+    return estimateCountryRain(selected, warmingC, sea.physics)
+  }, [selected, warmingC, sea])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -176,7 +182,7 @@ export function StatsPanel({
           <strong>
             {mapMode === 'rain'
               ? `${formatDeltaFrac(totals.wettestDelta)} / ${formatDeltaFrac(totals.driestDelta)}`
-              : `+${totals.hottest.toFixed(1)}°C`}
+              : `${formatAbsoluteC(totals.hottest)}°C`}
           </strong>
           <em>
             {mapMode === 'rain' ? 'wettest / driest Δ%' : 'vs pre-industrial'}
@@ -202,8 +208,8 @@ export function StatsPanel({
             </div>
             <div>
               <dt>Local warming</dt>
-              <dd>
-                +{selectedTemp.absoluteC.toFixed(1)}°C
+              <dd className={selectedTemp.absoluteC < 0 ? 'cold' : undefined}>
+                {formatAbsoluteC(selectedTemp.absoluteC)}°C
                 <span>{formatDeltaC(selectedTemp.deltaSince2020C)} since 2020s</span>
               </dd>
             </div>
@@ -326,7 +332,7 @@ export function StatsPanel({
                 >
                   <td>{row.name}</td>
                   <td>{formatArea(row.areaLostKm2)}</td>
-                  <td className="temp-cell">+{row.absoluteC.toFixed(1)}</td>
+                  <td className="temp-cell">{formatAbsoluteC(row.absoluteC)}</td>
                   <td className={row.deltaMm < 0 ? 'rain-dry' : 'rain-wet'}>
                     {formatDeltaFrac(row.deltaFrac)}
                   </td>

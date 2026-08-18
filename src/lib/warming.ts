@@ -1,5 +1,12 @@
 import { geoArea, geoCentroid, geoLength } from 'd3-geo'
 import type { CountryFeature } from '../lib/countries'
+import {
+  aerosolUnmaskingBoost,
+  albedoAmplification,
+  amocCoolingC,
+  NEUTRAL_PHYSICS,
+  type ScenarioPhysics,
+} from './earthSystem'
 
 /**
  * Where a country's warming departs from the global mean.
@@ -126,33 +133,52 @@ export function continentality(feature: CountryFeature): number {
   return Math.max(0, Math.min(1, (halfWidthKm - 20) / 230))
 }
 
-export function countryWarmingMultiplier(feature: CountryFeature): number {
+export function countryWarmingMultiplier(
+  feature: CountryFeature,
+  physics: ScenarioPhysics = NEUTRAL_PHYSICS,
+): number {
   const { lat, lng } = geoShape(feature)
   // Land warms ~1.4× as fast as ocean, so a country's exposure to maritime air
   // damps it and a continental interior amplifies it.
   const landSea = 0.88 + 0.26 * continentality(feature)
-  const raw = zonalRatio(lat) * landSea * warmingHoleFactor(lat, lng)
-  return Math.min(2.8, Math.max(0.6, raw))
+  const base = zonalRatio(lat) * landSea * warmingHoleFactor(lat, lng)
+  // Earth-system pathways add to the pattern rather than replacing it: a darker
+  // surface and a thinning aerosol haze both amplify warming where they act.
+  const extra =
+    albedoAmplification(lat, physics.albedoFeedback) +
+    aerosolUnmaskingBoost(lat, lng, physics.aerosolUnmasking)
+  return Math.min(3.6, Math.max(0.6, base + extra))
 }
 
 export interface CountryTemp {
   absoluteC: number
   deltaSince2020C: number
   multiplier: number
+  /** Absolute cooling from a stalled Atlantic circulation, °C (0 when none). */
+  amocCoolingC: number
 }
 
 export function estimateCountryTemp(
   feature: CountryFeature,
   globalWarmingC: number,
+  physics: ScenarioPhysics = NEUTRAL_PHYSICS,
   baselineGlobalC = 1.15,
 ): CountryTemp {
-  const multiplier = countryWarmingMultiplier(feature)
-  const absoluteC = globalWarmingC * multiplier
-  const around2020 = baselineGlobalC * multiplier
+  const { lat, lng } = geoShape(feature)
+  const multiplier = countryWarmingMultiplier(feature, physics)
+  // Subtracted rather than scaled: a collapsing overturning circulation can push
+  // a region below where it started while the planet as a whole keeps warming,
+  // and no multiplier on a positive global mean can ever express that.
+  const cooling = amocCoolingC(lat, lng, physics.amocWeakening)
+  const absoluteC = globalWarmingC * multiplier - cooling
+  // The 2020s reference keeps today's pattern, so the delta shows what this
+  // pathway's mechanisms change rather than baking them into both ends.
+  const around2020 = baselineGlobalC * countryWarmingMultiplier(feature)
   return {
     absoluteC,
     deltaSince2020C: absoluteC - around2020,
     multiplier,
+    amocCoolingC: cooling,
   }
 }
 
@@ -161,23 +187,45 @@ export function formatDeltaC(d: number): string {
   return `${sign}${d.toFixed(1)}°C`
 }
 
-/** Map fill: cool slate → yellow → amber → rust by local warming vs pre-industrial. */
+/**
+ * Absolute temperature vs pre-industrial, with its own sign.
+ *
+ * Call sites used to hard-code a leading `+`, which was safe while every
+ * pathway only warmed. A stalled Atlantic circulation can put a region below
+ * pre-industrial, and that shortcut then printed Iceland as "+-4.0".
+ */
+export function formatAbsoluteC(c: number, digits = 1): string {
+  const rounded = Number(c.toFixed(digits))
+  const sign = rounded < 0 ? '−' : '+'
+  return `${sign}${Math.abs(rounded).toFixed(digits)}`
+}
+
+/**
+ * Map fill by local temperature vs pre-industrial: blue where a region ends up
+ * colder than it started, then pale cool → cream → amber → rust.
+ *
+ * Stops are keyed to °C rather than to a normalised position so the cold end
+ * could be added without shifting any of the warm anchors — every pathway that
+ * existed before still paints exactly as it did. The blues only ever appear
+ * under a stalled Atlantic circulation, which is the point of having them.
+ */
+const TEMP_STOPS = [
+  { c: -5, r: 46, g: 82, b: 145 },
+  { c: -1, r: 82, g: 128, b: 180 },
+  { c: 1, r: 168, g: 196, b: 188 },
+  { c: 3.25, r: 214, g: 210, b: 160 },
+  { c: 5.5, r: 232, g: 168, b: 92 },
+  { c: 7.75, r: 196, g: 92, b: 48 },
+  { c: 10, r: 140, g: 36, b: 28 },
+] as const
+
 export function tempColor(absoluteC: number, hovered: boolean): string {
-  // Anchor ~1°C (near today) → ~10°C+ (catastrophic local)
-  const t = Math.max(0, Math.min(1, (absoluteC - 1.0) / 9.0))
-  // pale cool → warm cream → orange → deep rust
-  const stops = [
-    { t: 0, r: 168, g: 196, b: 188 },
-    { t: 0.25, r: 214, g: 210, b: 160 },
-    { t: 0.5, r: 232, g: 168, b: 92 },
-    { t: 0.75, r: 196, g: 92, b: 48 },
-    { t: 1, r: 140, g: 36, b: 28 },
-  ]
+  const c = Math.max(TEMP_STOPS[0].c, Math.min(TEMP_STOPS[TEMP_STOPS.length - 1].c, absoluteC))
   let i = 0
-  while (i < stops.length - 2 && t > stops[i + 1].t) i += 1
-  const a = stops[i]
-  const b = stops[i + 1]
-  const u = (t - a.t) / (b.t - a.t || 1)
+  while (i < TEMP_STOPS.length - 2 && c > TEMP_STOPS[i + 1].c) i += 1
+  const a = TEMP_STOPS[i]
+  const b = TEMP_STOPS[i + 1]
+  const u = (c - a.c) / (b.c - a.c || 1)
   const r = Math.round(a.r + u * (b.r - a.r))
   const g = Math.round(a.g + u * (b.g - a.g))
   const bl = Math.round(a.b + u * (b.b - a.b))
@@ -186,6 +234,7 @@ export function tempColor(absoluteC: number, hovered: boolean): string {
 }
 
 export const TEMP_LEGEND = [
+  { label: '−3°C', color: 'rgb(64, 105, 162)' },
   { label: '+1°C', color: 'rgb(168, 196, 188)' },
   { label: '+3°C', color: 'rgb(214, 210, 160)' },
   { label: '+5°C', color: 'rgb(232, 168, 92)' },

@@ -31,6 +31,8 @@
   --accent: #ff9155;
   --danger: #ff6f5c;
   --good: #4fd193;
+  /* Below pre-industrial — matches the blue end of the map's temperature ramp. */
+  --cold: #6ea6dc;
 
   --font-display: 'Syne', sans-serif;
   --font-body: 'Figtree', sans-serif;
@@ -463,9 +465,69 @@ input {
   border-color: rgba(255, 111, 92, 0.36);
 }
 
+/* --- Scenario families ---------------------------------------------------
+   Two groups: how much we emit, and how the Earth answers. The heading carries
+   the distinction so an Earth-system pathway is not misread as a bigger
+   emissions number — most of them run on the current-policy trend. */
+
+.scenario-group + .scenario-group {
+  margin-top: 0.9rem;
+}
+
+.scenario-group-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.45rem;
+}
+
+.scenario-group-head h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.scenario-group-head p {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+/* Which mechanisms the active pathway switches on. */
+.forcing-chips {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.forcing-chips li {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--sc, var(--teal)) 72%, var(--ink));
+  background: color-mix(in srgb, var(--sc, var(--teal)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sc, var(--teal)) 34%, transparent);
+}
+
 .scenario-details {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.scenario-details.evidence p {
+  margin: 0.4rem 0 0;
+  line-height: 1.55;
+  padding-left: 0.7rem;
+  border-left: 2px solid color-mix(in srgb, var(--teal) 40%, transparent);
 }
 
 /* Shared disclosure styling for every <details> in the app — the native
@@ -928,6 +990,16 @@ input[type='range']::-moz-range-thumb {
 
 .country-metrics .danger span {
   color: color-mix(in srgb, var(--danger) 75%, var(--dim));
+}
+
+/* A region that ends up below pre-industrial — only reachable under a stalled
+   Atlantic circulation, and worth not reading as just another small number. */
+.country-metrics .cold {
+  color: var(--cold);
+}
+
+.country-metrics .cold span {
+  color: color-mix(in srgb, var(--cold) 75%, var(--dim));
 }
 
 /* --- Ice ----------------------------------------------------------------- */
