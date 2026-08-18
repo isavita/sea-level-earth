@@ -2,8 +2,21 @@ import type { CountryFeature } from './countries'
 import { computeLoss } from './landLoss'
 import { estimateCountryTemp } from './warming'
 import { estimateCountryRain } from './rain'
+import { localSeaLevel } from './regionalSeaLevel'
 
 export type ImpactSortKey = 'area' | 'pct' | 'temp' | 'rain' | 'rainDelta'
+
+/**
+ * Everything needed to turn a global mean rise into the rise a given coast
+ * actually sees. Grouped so callers pass one object instead of threading three
+ * loosely-related arguments through every signature.
+ */
+export interface SeaLevelContext {
+  /** Global mean rise vs 1995–2014, in metres. */
+  globalMeanM: number
+  year: number
+  iceSheetInstability: boolean
+}
 
 export interface CountryImpactRow {
   feature: CountryFeature
@@ -20,11 +33,15 @@ export interface CountryImpactRow {
   futureMm: number
   deltaMm: number
   deltaFrac: number
+  /** Relative sea-level rise at this country's own coast (m). */
+  localSeaLevelM: number
+  /** Local rise ÷ global mean. */
+  seaLevelRatio: number
 }
 
 export function rankByImpact(
   features: CountryFeature[],
-  seaLevelM: number,
+  sea: SeaLevelContext,
   warmingC: number,
   limit = 25,
   sortBy: ImpactSortKey = 'temp',
@@ -38,14 +55,24 @@ export function rankByImpact(
 ): CountryImpactRow[] {
   const rows: CountryImpactRow[] = []
   for (const f of features) {
+    // Each coast gets its own rise: gravitational fingerprints, ocean dynamics
+    // and land motion move it well away from the global mean.
+    const local = localSeaLevel(
+      f,
+      sea.globalMeanM,
+      sea.year,
+      sea.iceSheetInstability,
+    )
     const loss = f.__risk
-      ? computeLoss(f.__risk, seaLevelM, f.__areaKm2)
+      ? computeLoss(f.__risk, local.riseM, f.__areaKm2)
       : null
     const temp = estimateCountryTemp(f, warmingC)
     const rain = estimateCountryRain(f, warmingC)
     const areaKm2 = loss?.areaKm2 ?? f.__areaKm2 ?? 0
     if (areaKm2 <= 0) continue
     rows.push({
+      localSeaLevelM: local.riseM,
+      seaLevelRatio: local.ratio,
       feature: f,
       name: f.properties.name,
       id: f.properties.id,

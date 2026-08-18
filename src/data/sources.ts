@@ -125,11 +125,11 @@ export const MODEL_NOTES: ModelNote[] = [
   },
   {
     title: 'Country temperature',
-    body: 'Local warming is the global figure multiplied by a latitude factor, so high-latitude countries warm faster (Arctic amplification). It is a sketch of a real pattern, not a downscaled climate model — it has no continentality, altitude or ocean-current detail.',
+    body: 'Local warming scales the global figure by three patterns: an asymmetric zonal profile (the Arctic runs 2–3× the global rate, while the Southern Ocean is the slowest-warming water on Earth and Antarctica sits near the global mean), land–sea contrast so continental interiors outrun maritime margins, and the North Atlantic warming hole south of Greenland. A sketch of the pattern, not a downscaled model — no altitude or vegetation detail.',
   },
   {
     title: 'Land lost to the sea',
-    body: 'Each country carries a measured share of land below 5 m (the low-elevation coastal zone). Losses at other heights are interpolated from that share, so this shows exposure by elevation — not flood defences, land subsidence, sediment gain, or where a specific city floods.',
+    body: 'Each country carries a measured share of land below 5 m (the low-elevation coastal zone), and losses at other heights are interpolated from that share. Rise is resolved per coast rather than globally: melting ice sheets pull the ocean toward them, so relative sea level falls near a shrinking one and overshoots by 10–30% in the far field; a slowing Atlantic circulation banks water on north-east North America; and land motion — post-glacial rebound lifting Scandinavia, groundwater extraction sinking deltas — can outweigh the climate signal. Exposure by elevation, not flood defences, sediment gain, or where a specific city floods.',
   },
   {
     title: 'Rainfall',

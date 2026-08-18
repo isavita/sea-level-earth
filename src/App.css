@@ -889,6 +889,17 @@ input[type='range']::-moz-range-thumb {
   grid-template-columns: repeat(2, 1fr);
 }
 
+/* Five metrics in a 2-up grid leaves a lone cell — let the last one span. */
+.country-metrics.five > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.sea-note {
+  color: var(--muted);
+  border-left: 2px solid color-mix(in srgb, var(--teal) 55%, transparent);
+  padding-left: 0.55rem;
+}
+
 .country-metrics dt {
   font-size: 0.64rem;
   text-transform: uppercase;

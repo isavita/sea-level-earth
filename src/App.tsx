@@ -88,6 +88,18 @@ function AppShell() {
   const displayYear = Math.round(year)
   const isMobile = useIsMobile()
 
+  // Bundled so land loss can be resolved per coast rather than from the global
+  // mean — the fingerprint pattern depends on which ice is melting, so the
+  // scenario's instability flag is part of the context.
+  const sea = useMemo(
+    () => ({
+      globalMeanM: seaLevelM,
+      year,
+      iceSheetInstability: scenario.iceSheetInstability,
+    }),
+    [seaLevelM, year, scenario.iceSheetInstability],
+  )
+
   // Rivers only draw on the globe in the rain view, so picking one switches
   // the map there — and on mobile brings its panel to the front.
   const selectRiver = (id: string | null) => {
@@ -130,7 +142,7 @@ function AppShell() {
     learn: <LearnPanel />,
     countries: (
       <StatsPanel
-        seaLevelM={seaLevelM}
+        sea={sea}
         warmingC={warmingC}
         mapMode={mapMode}
         onMapMode={setMapMode}
@@ -179,7 +191,7 @@ function AppShell() {
             }
           >
             <EarthGlobe
-              seaLevelM={seaLevelM}
+              sea={sea}
               warmingC={warmingC}
               mapMode={mapMode}
               playing={playing}

@@ -13,6 +13,8 @@ import {
   RAIN_LEGEND,
 } from '../lib/rain'
 import { useIsMobile } from '../lib/useIsMobile'
+import { localSeaLevel } from '../lib/regionalSeaLevel'
+import type { SeaLevelContext } from '../lib/impact'
 import {
   allRiverStates,
   riverFlowColor,
@@ -23,7 +25,7 @@ import {
 export type MapMode = 'temp' | 'loss' | 'rain'
 
 interface EarthGlobeProps {
-  seaLevelM: number
+  sea: SeaLevelContext
   warmingC: number
   mapMode: MapMode
   /** True while the timeline is auto-playing — labels are thinned for speed. */
@@ -126,7 +128,7 @@ const PATH_POINT_LAT = (p: unknown) => (p as [number, number])[0]
 const PATH_POINT_LNG = (p: unknown) => (p as [number, number])[1]
 
 export function EarthGlobe({
-  seaLevelM,
+  sea,
   warmingC,
   mapMode,
   playing,
@@ -261,7 +263,13 @@ export function EarthGlobe({
       }
     >()
     for (const f of features) {
-      const frac = f.__risk ? fractionLostAtRise(f.__risk, seaLevelM) : 0
+      const localM = localSeaLevel(
+        f,
+        sea.globalMeanM,
+        sea.year,
+        sea.iceSheetInstability,
+      ).riseM
+      const frac = f.__risk ? fractionLostAtRise(f.__risk, localM) : 0
       const areaKm2 = f.__areaKm2 ?? 0
       const rain = estimateCountryRain(f, warmingC)
       m.set(f.properties.id, {
@@ -274,7 +282,7 @@ export function EarthGlobe({
       })
     }
     return m
-  }, [features, seaLevelM, warmingC])
+  }, [features, sea, warmingC])
 
   /**
    * How many numeric labels to draw. Each is extruded 3D text whose geometry

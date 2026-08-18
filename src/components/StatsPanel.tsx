@@ -13,11 +13,16 @@ import {
   formatDeltaMm,
   formatMm,
 } from '../lib/rain'
-import { rankByImpact, type ImpactSortKey } from '../lib/impact'
+import {
+  rankByImpact,
+  type ImpactSortKey,
+  type SeaLevelContext,
+} from '../lib/impact'
+import { localSeaLevel, seaLevelNote } from '../lib/regionalSeaLevel'
 import type { MapMode } from './EarthGlobe'
 
 interface StatsPanelProps {
-  seaLevelM: number
+  sea: SeaLevelContext
   warmingC: number
   mapMode: MapMode
   onMapMode: (mode: MapMode) => void
@@ -26,7 +31,7 @@ interface StatsPanelProps {
 }
 
 export function StatsPanel({
-  seaLevelM,
+  sea,
   warmingC,
   mapMode,
   onMapMode,
@@ -38,8 +43,8 @@ export function StatsPanel({
   const [sortBy, setSortBy] = useState<ImpactSortKey>('temp')
 
   const ranking = useMemo(
-    () => rankByImpact(features, seaLevelM, warmingC, 30, sortBy),
-    [features, seaLevelM, warmingC, sortBy],
+    () => rankByImpact(features, sea, warmingC, 30, sortBy),
+    [features, sea, warmingC, sortBy],
   )
 
   const totals = useMemo(() => {
@@ -56,7 +61,13 @@ export function StatsPanel({
       wettestDelta = Math.max(wettestDelta, rain.deltaFrac)
       driestDelta = Math.min(driestDelta, rain.deltaFrac)
       if (!f.__risk) continue
-      const row = computeLoss(f.__risk, seaLevelM, f.__areaKm2)
+      const local = localSeaLevel(
+        f,
+        sea.globalMeanM,
+        sea.year,
+        sea.iceSheetInstability,
+      )
+      const row = computeLoss(f.__risk, local.riseM, f.__areaKm2)
       if (!row) continue
       base += row.areaKm2
       lost += row.areaLostKm2
@@ -68,12 +79,22 @@ export function StatsPanel({
       wettestDelta: Number.isFinite(wettestDelta) ? wettestDelta : 0,
       driestDelta: Number.isFinite(driestDelta) ? driestDelta : 0,
     }
-  }, [features, seaLevelM, warmingC])
+  }, [features, sea, warmingC])
+
+  const selectedSea = useMemo(() => {
+    if (!selected) return null
+    return localSeaLevel(
+      selected,
+      sea.globalMeanM,
+      sea.year,
+      sea.iceSheetInstability,
+    )
+  }, [selected, sea])
 
   const selectedLoss = useMemo(() => {
-    if (!selected?.__risk) return null
-    return computeLoss(selected.__risk, seaLevelM, selected.__areaKm2)
-  }, [selected, seaLevelM])
+    if (!selected?.__risk || !selectedSea) return null
+    return computeLoss(selected.__risk, selectedSea.riseM, selected.__areaKm2)
+  }, [selected, selectedSea])
 
   const selectedTemp = useMemo(() => {
     if (!selected) return null
@@ -90,10 +111,10 @@ export function StatsPanel({
     if (!q) return ranking
     // Search every country, including ones the land sorts would hide — a
     // landlocked country must still be findable by name.
-    return rankByImpact(features, seaLevelM, warmingC, 500, sortBy, false)
+    return rankByImpact(features, sea, warmingC, 500, sortBy, false)
       .filter((r) => r.name.toLowerCase().includes(q))
       .slice(0, 30)
-  }, [query, ranking, features, seaLevelM, warmingC, sortBy])
+  }, [query, ranking, features, sea, warmingC, sortBy])
 
   return (
     <section className="panel stats">
@@ -171,7 +192,7 @@ export function StatsPanel({
               Clear
             </button>
           </div>
-          <dl className="country-metrics four">
+          <dl className="country-metrics four five">
             <div>
               <dt>Land lost</dt>
               <dd className="danger">
@@ -200,7 +221,30 @@ export function StatsPanel({
                 <span>{formatDeltaFrac(selectedRain.deltaFrac)}</span>
               </dd>
             </div>
+            {selectedSea && (
+              <div>
+                <dt>Sea level here</dt>
+                <dd
+                  className={
+                    selectedSea.riseM > sea.globalMeanM ? 'danger' : undefined
+                  }
+                >
+                  {selectedSea.riseM >= 0 ? '+' : '−'}
+                  {Math.abs(selectedSea.riseM).toFixed(2)} m
+                  <span>
+                    {selectedSea.riseM < 0
+                      ? 'sea falling relative to the land'
+                      : sea.globalMeanM > 0
+                        ? `${Math.round(selectedSea.ratio * 100)}% of global mean`
+                        : 'vs 1995–2014'}
+                  </span>
+                </dd>
+              </div>
+            )}
           </dl>
+          {selectedSea && seaLevelNote(selectedSea) && (
+            <p className="hint sea-note">{seaLevelNote(selectedSea)}</p>
+          )}
           <p className="hint">
             Rain baseline from World Bank where available; change is a
             latitude-pattern sketch scaled by warming (subtropics often drier,
