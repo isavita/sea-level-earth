@@ -1,4 +1,4 @@
-import { geoBounds } from 'd3-geo'
+import { geoArea, geoBounds } from 'd3-geo'
 import type { Geometry, Polygon, MultiPolygon, Position } from 'geojson'
 
 /**
@@ -237,6 +237,50 @@ function simplifyPolar(rings: Position[][]): Position[][] {
     epsilon *= 2
   }
   return out
+}
+
+/**
+ * Drops islands too small to occupy a pixel, for rendering only.
+ *
+ * three-globe builds one scene object per *part*, not per country, and draws
+ * each one twice — once for the fill, once for the border. The 1:50m outlines
+ * carry 1,619 parts, so the globe was issuing well over three thousand draw
+ * calls a frame, and the great majority of them were for specks smaller than
+ * one pixel. On a phone that is the whole performance problem, and the specks
+ * were visible only as coastline noise.
+ *
+ * The largest part of every country is always kept, whatever its size, so no
+ * country can disappear from the map — Bermuda is 65 km² and the app has real
+ * exposure data for it. At the 600 km² default this hides 0.125% of the
+ * world's land and removes 60% of the draw calls.
+ *
+ * Rendering only: the models keep reading the full geometry, so no centroid,
+ * area or projection anywhere else in the app shifts because of this.
+ */
+export function dropSubPixelParts(
+  geometry: Geometry,
+  minAreaKm2: number,
+): Geometry {
+  if (geometry.type !== 'MultiPolygon') return geometry
+  const parts = (geometry as MultiPolygon).coordinates
+  if (parts.length < 2) return geometry
+
+  const EARTH_R2 = 6371 * 6371
+  const sized = parts.map((rings) => ({
+    rings,
+    km2: geoArea({ type: 'Polygon', coordinates: rings }) * EARTH_R2,
+  }))
+  let largest = 0
+  for (let i = 1; i < sized.length; i++) {
+    if (sized[i].km2 > sized[largest].km2) largest = i
+  }
+  const kept = sized
+    .filter((p, i) => i === largest || p.km2 >= minAreaKm2)
+    .map((p) => p.rings)
+
+  return kept.length === parts.length
+    ? geometry
+    : { type: 'MultiPolygon', coordinates: kept }
 }
 
 /**

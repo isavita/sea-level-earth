@@ -1003,9 +1003,10 @@ input[type='range']::-moz-range-thumb {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  background: rgba(7, 18, 24, 0.72);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
+  background: rgba(7, 18, 24, 0.88);
+  /* Deliberately no backdrop-filter: this sits on the globe canvas, which
+     repaints continuously while the Earth rotates, and blurring a live surface
+     costs a full re-composite every frame. Solid enough to read without it. */
   color: #cfe3e2;
   padding: 0.4rem 0.7rem;
   border-radius: 999px;
@@ -1716,9 +1717,10 @@ input[type='range']::-moz-range-thumb {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  background: rgba(7, 18, 24, 0.72);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
+  background: rgba(7, 18, 24, 0.88);
+  /* Deliberately no backdrop-filter: this sits on the globe canvas, which
+     repaints continuously while the Earth rotates, and blurring a live surface
+     costs a full re-composite every frame. Solid enough to read without it. */
   color: #cfe3e2;
   padding: 0.55rem 0.7rem;
   border-radius: var(--r-md);
@@ -1747,9 +1749,10 @@ input[type='range']::-moz-range-thumb {
   position: absolute;
   right: 0.85rem;
   bottom: 0.85rem;
-  background: rgba(7, 18, 24, 0.74);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
+  background: rgba(7, 18, 24, 0.88);
+  /* Deliberately no backdrop-filter: this sits on the globe canvas, which
+     repaints continuously while the Earth rotates, and blurring a live surface
+     costs a full re-composite every frame. Solid enough to read without it. */
   color: #cfe3e2;
   padding: 0.6rem 0.7rem;
   border-radius: var(--r-md);

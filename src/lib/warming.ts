@@ -1,4 +1,5 @@
 import { geoArea, geoCentroid, geoLength } from 'd3-geo'
+import { lift } from './mapColor'
 import type { CountryFeature } from '../lib/countries'
 import {
   aerosolUnmaskingBoost,
@@ -229,8 +230,7 @@ export function tempColor(absoluteC: number, hovered: boolean): string {
   const r = Math.round(a.r + u * (b.r - a.r))
   const g = Math.round(a.g + u * (b.g - a.g))
   const bl = Math.round(a.b + u * (b.b - a.b))
-  const alpha = hovered ? 0.98 : 0.94
-  return `rgba(${r}, ${g}, ${bl}, ${alpha})`
+  return lift(r, g, bl, hovered)
 }
 
 export const TEMP_LEGEND = [

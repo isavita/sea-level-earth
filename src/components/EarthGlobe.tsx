@@ -26,6 +26,7 @@ import {
 } from '../lib/rain'
 import { useIsMobile } from '../lib/useIsMobile'
 import { localSeaLevel } from '../lib/regionalSeaLevel'
+import { dropSubPixelParts } from '../lib/globeGeometry'
 import type { SeaLevelContext } from '../lib/impact'
 import type { ResolvedTheme } from '../lib/useTheme'
 import {
@@ -163,8 +164,35 @@ const prefersReducedMotion = () =>
    identity on every React render, which makes globe.gl re-run them across all
    ~241 polygons and re-set their materials on every timeline commit — for
    values that never change. */
-const TRANSPARENT_SIDE = () => 'rgba(0,0,0,0)'
-const POLYGON_STROKE = () => 'rgba(22, 32, 30, 0.5)'
+/**
+ * No side wall at all, rather than a transparent one.
+ *
+ * three-globe decides whether to build the extruded sides from whether this
+ * accessor returns something truthy — and `'rgba(0,0,0,0)'` is a non-empty
+ * string. So every country was getting a full torso generated from the globe's
+ * centre out to its surface, invisible, and a second material group with it.
+ * That doubled the draw calls for the polygon layer and put ~240 more
+ * transparent objects into the per-frame depth sort. Returning an empty string
+ * skips the geometry entirely; the caps are all that was ever visible.
+ */
+const NO_SIDE = () => ''
+/**
+ * Opaque, not 50% black.
+ *
+ * A translucent line material lands in the transparent pass, which three.js
+ * re-sorts by depth every frame — so the draw order of ~640 outlines changed
+ * continuously as the globe rotated. Worse, every internal border is drawn
+ * twice, once by each neighbouring country, so the two coincident lines
+ * blended to a darker value than a coastline and flickered against each other.
+ * A solid colour renders in the opaque pass in a stable order and looks the
+ * same whether a border is shared or not.
+ */
+const POLYGON_STROKE = () => 'rgb(64, 72, 62)'
+/* Near plane, shared by the setup and resize paths so they cannot drift. It
+   can only be this far out because the controls are held back from the surface
+   by MIN_CAMERA_DISTANCE; the two numbers have to move together. */
+const CAMERA_NEAR = 3
+
 const PATH_POINT_LAT = (p: unknown) => (p as [number, number])[0]
 const PATH_POINT_LNG = (p: unknown) => (p as [number, number])[1]
 
@@ -215,39 +243,162 @@ export function EarthGlobe({
     return () => ro.disconnect()
   }, [])
 
-  // One-time camera + controls setup once the globe + data are ready.
+  /**
+   * One-time camera + controls setup, once the globe object actually exists.
+   *
+   * `dims` has to be in the dependencies. The globe is not rendered until the
+   * stage has been measured, so on the pass where the countries arrive there is
+   * no instance to configure yet — and without `dims` here this effect bailed
+   * out and never ran again, leaving the globe on OrbitControls' defaults: no
+   * auto-rotation, a rotate speed 7× too fast if anything did start it, and
+   * none of the framing below.
+   *
+   * The ref guard keeps it to once per globe. `pointOfView` snaps the camera,
+   * and re-running it on every resize would throw away the user's own rotation
+   * every time the bottom sheet opened or closed.
+   */
+  const didSetupGlobe = useRef(false)
+  const [globeReady, setGlobeReady] = useState(false)
+
   useEffect(() => {
     const g = globeRef.current
-    if (!g || features.length === 0) return
+    if (!g || !dims || features.length === 0 || didSetupGlobe.current) return
+    didSetupGlobe.current = true
     const controls = g.controls()
     controls.autoRotate = !prefersReducedMotion()
     controls.autoRotateSpeed = 0.28
     controls.enableDamping = true
+
+    /**
+     * Buy back depth precision, which is what makes the borders shimmer.
+     *
+     * three-globe draws each country's outline as a line lifted 0.01 world
+     * units above its fill. Whether that lift survives depends entirely on the
+     * depth buffer, and the default camera spans near 0.05 to far 125000 — a
+     * 2,500,000:1 range that leaves roughly 0.053 units of depth resolution at
+     * the globe's surface. The lift is five times smaller than one depth step,
+     * so fill and outline land in the same bucket and fight for the pixel;
+     * which one wins changes as the globe turns, and that reads as borders
+     * crawling and smearing.
+     *
+     * The near plane is that low only because the controls allow zooming to
+     * 0.055 units off the surface — a distance at which the globe is an
+     * unreadable wall anyway. Holding the camera a little further out lets the
+     * near plane move out with it, and the lift then clears the depth step by
+     * more than an order of magnitude at every zoom level.
+     */
+    const MIN_CAMERA_DISTANCE = 115 // globe radius is 100 internally
+    controls.minDistance = Math.max(controls.minDistance, MIN_CAMERA_DISTANCE)
+    const camera = g.camera() as unknown as {
+      near: number
+      far: number
+      updateProjectionMatrix?: () => void
+    }
+    // Only `near` is set. `far` stays at the library's 125000: it re-applies
+    // that continuously, and pulling it in would have been worth about one
+    // extra bit of depth on top of the order of magnitude `near` already buys.
+    camera.near = CAMERA_NEAR
+    camera.updateProjectionMatrix?.()
+    setGlobeReady(true)
+  }, [dims, features.length])
+
+  // Framing is separate from setup so it can follow the phone/desktop switch
+  // without being tied to `dims`, which changes every time the sheet moves.
+  useEffect(() => {
+    const g = globeRef.current
+    if (!g || !globeReady) return
     // Closer on phones so the (smaller) globe fills the frame and per-country
     // labels render large enough to read.
     g.pointOfView({ lat: 20, lng: 10, altitude: isMobile ? 2.1 : 2.15 }, 0)
-  }, [features.length, isMobile])
+  }, [globeReady, isMobile])
 
-  // Cap the device pixel ratio — the single biggest GPU win on phones, where
-  // devicePixelRatio is often 3. Re-apply whenever the canvas is resized.
+  /**
+   * Render resolution, chosen by watching the frame rate rather than by
+   * guessing from the user agent.
+   *
+   * This used to be a flat cap of 1.5 on anything phone-sized. On a modern
+   * phone with a 3× screen that draws a quarter of the pixels it could and
+   * lets the browser upscale the result, which is exactly what makes coastlines
+   * and label text look chewed. But raising the cap blindly would punish a
+   * cheap device, and no user-agent string reliably separates the two.
+   *
+   * So: start where a capable device should be, measure real frame intervals,
+   * and step down only if the device cannot hold the rate. It settles within a
+   * couple of seconds and never steps back up, so it cannot oscillate.
+   */
+  const qualityRef = useRef(0)
+  const [pixelRatio, setPixelRatio] = useState<number | null>(null)
+
+  useEffect(() => {
+    const ladder = isMobile ? [2.5, 2, 1.5, 1.25] : [2, 1.5, 1.25]
+    qualityRef.current = 0
+    setPixelRatio(Math.min(window.devicePixelRatio || 1, ladder[0]))
+
+    let raf = 0
+    let last = 0
+    let samples: number[] = []
+    let stop = false
+
+    const tick = (now: number) => {
+      if (stop) return
+      // A hidden tab stops painting; its intervals say nothing about the GPU.
+      if (last && !document.hidden) {
+        const dt = now - last
+        if (dt < 500) samples.push(dt)
+      }
+      last = now
+      if (samples.length >= 90) {
+        const sorted = [...samples].sort((a, b) => a - b)
+        const median = sorted[sorted.length >> 1]
+        samples = []
+        // ~50 fps. Below that, drop a rung and measure again.
+        if (median > 20 && qualityRef.current < ladder.length - 1) {
+          qualityRef.current += 1
+          setPixelRatio(
+            Math.min(window.devicePixelRatio || 1, ladder[qualityRef.current]),
+          )
+        } else {
+          stop = true
+          return
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      stop = true
+      cancelAnimationFrame(raf)
+    }
+  }, [isMobile, features.length])
+
+  // Apply the chosen ratio, and keep buffer, element and camera in step.
   useEffect(() => {
     const g = globeRef.current
-    if (!g || !dims) return
+    if (!g || !dims || pixelRatio == null) return
     const renderer = g.renderer()
     if (!renderer) return
-    const cap = isMobile ? 1.5 : 2
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap))
+    renderer.setPixelRatio(pixelRatio)
     // setPixelRatio resizes the drawing buffer but leaves the CSS size alone,
     // so re-apply the size (default updateStyle=true, matching react-globe.gl)
     // to keep buffer and element in step.
     renderer.setSize(dims.w, dims.h)
     // setSize does not touch the camera, and a stale aspect skews the globe.
-    const camera = g.camera() as { aspect?: number; updateProjectionMatrix?: () => void }
+    const camera = g.camera() as unknown as {
+      aspect?: number
+      near: number
+      far: number
+      updateProjectionMatrix?: () => void
+    }
     if (typeof camera.aspect === 'number') {
       camera.aspect = dims.w / dims.h
+      // Re-assert the depth range here too: this is the effect that runs on
+      // every resize, and a reset near plane brings the border shimmer back.
+      // Re-assert the near plane here too: this is the effect that runs on
+      // every resize, and a reset near plane brings the border shimmer back.
+      camera.near = CAMERA_NEAR
       camera.updateProjectionMatrix?.()
     }
-  }, [dims, isMobile, features.length])
+  }, [dims, pixelRatio, features.length])
 
   /**
    * Hold the labels back until the globe itself is on screen.
@@ -328,6 +479,23 @@ export function EarthGlobe({
     return m
   }, [features])
 
+  /**
+   * What the globe actually draws. Same countries, minus the islands that
+   * cannot occupy a pixel at the size the globe is rendered — a phone globe is
+   * about 32 km per pixel, a desktop one about 21.
+   *
+   * Kept separate from `features` on purpose: every model in the app keeps
+   * reading the full outlines, so nothing downstream moves. Only the scene is
+   * lighter.
+   */
+  const displayFeatures = useMemo(() => {
+    const minAreaKm2 = isMobile ? 600 : 200
+    return features.map((f) => {
+      const geometry = dropSubPixelParts(f.geometry, minAreaKm2)
+      return geometry === f.geometry ? f : { ...f, geometry }
+    })
+  }, [features, isMobile])
+
   // Label priority: largest countries first, so a capped budget keeps the
   // most legible ones.
   const labelOrder = useMemo(
@@ -383,7 +551,22 @@ export function EarthGlobe({
    * 24 keeps the largest countries counting up — the ones whose labels are
    * legible at play-through zoom anyway — for roughly a third of the cost.
    */
-  const labelBudget = !labelsReady ? 0 : playing ? (isMobile ? 0 : 24) : 150
+  /**
+   * Each label is its own extruded-text mesh and its own draw call. 150 of them
+   * is reasonable on a desktop globe; on a phone they overlap into illegible
+   * speckle *and* cost as much as every country polygon combined, so the phone
+   * gets the largest countries only — which are the only ones readable at that
+   * size anyway.
+   */
+  const labelBudget = !labelsReady
+    ? 0
+    : playing
+      ? isMobile
+        ? 0
+        : 24
+      : isMobile
+        ? 42
+        : 150
 
   /**
    * Label geometry dominates the frame budget: measured over a play-through,
@@ -584,7 +767,7 @@ export function EarthGlobe({
           showAtmosphere
           atmosphereColor={SKY[theme].atmosphere}
           atmosphereAltitude={0.12}
-          polygonsData={features}
+          polygonsData={displayFeatures}
           polygonGeoJsonGeometry="geometry"
           polygonCapColor={(d: object) => {
             const f = d as CountryFeature
@@ -600,7 +783,7 @@ export function EarthGlobe({
             }
             return lossColor(metrics?.frac ?? 0, hovered)
           }}
-          polygonSideColor={TRANSPARENT_SIDE}
+          polygonSideColor={NO_SIDE}
           polygonStrokeColor={POLYGON_STROKE}
           polygonAltitude={0.006}
           polygonsTransitionDuration={0}
@@ -613,7 +796,10 @@ export function EarthGlobe({
             }
           }}
           onPolygonClick={(d: object) => {
-            onSelect(d as CountryFeature)
+            // The datum is the trimmed display copy; hand the panels the real
+            // feature so their centroids and areas stay exact.
+            const id = (d as CountryFeature).properties.id
+            onSelect(features.find((f) => f.properties.id === id) ?? null)
           }}
           pathsData={riverPaths}
           pathPoints="coords"
@@ -642,7 +828,11 @@ export function EarthGlobe({
           onLabelClick={handleLabelClick}
           onLabelHover={handleLabelHover}
           rendererConfig={{
-            antialias: !isMobile,
+            /* On everywhere now: a 1px outline on a rotating sphere crawls
+               without multisampling, and cutting the polygon layer's draw
+               calls ~6x freed the bandwidth this costs. The adaptive pixel
+               ratio above still backs off if a device cannot keep up. */
+            antialias: true,
             alpha: false,
             powerPreference: 'high-performance',
           }}

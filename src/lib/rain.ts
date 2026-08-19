@@ -1,4 +1,5 @@
 import { geoCentroid } from 'd3-geo'
+import { lift } from './mapColor'
 import type { CountryFeature } from './countries'
 import {
   amocRainfallShift,
@@ -208,7 +209,7 @@ export function rainDeltaColor(deltaFrac: number, hovered: boolean): string {
     g = Math.round(206 - u * 20)
     b = Math.round(192 + u * 40)
   }
-  return `rgba(${r}, ${g}, ${b}, ${hovered ? 0.98 : 0.94})`
+  return lift(r, g, b, hovered)
 }
 
 export const RAIN_LEGEND = [

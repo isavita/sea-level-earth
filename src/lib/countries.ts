@@ -1,4 +1,5 @@
 import { feature } from 'topojson-client'
+import { lift } from './mapColor'
 import { geoArea } from 'd3-geo'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import type { CountryRisk, CountryRiskFile } from './landLoss'
@@ -135,14 +136,13 @@ export function rankByLoss(
 /** Color for % land lost — cool slate → amber → rust. */
 export function lossColor(fractionLost: number, hovered: boolean): string {
   if (fractionLost <= 0.0005) {
-    return hovered ? 'rgba(214, 222, 208, 0.98)' : 'rgba(196, 206, 192, 0.94)'
+    return lift(196, 206, 192, hovered)
   }
   const t = Math.min(1, Math.pow(fractionLost / 0.35, 0.65))
   const r = Math.round(196 + t * (176 - 196))
   const g = Math.round(206 - t * 125)
   const b = Math.round(192 - t * 145)
-  const a = hovered ? 0.98 : 0.94
-  return `rgba(${r}, ${g}, ${b}, ${a})`
+  return lift(r, g, b, hovered)
 }
 
 export function oceanColor(seaLevelM: number): string {
