@@ -24,6 +24,7 @@ import {
   rainDeltaColor,
   RAIN_LEGEND,
 } from '../lib/rain'
+import { estimateCountryFire, fireColor, FIRE_LEGEND } from '../lib/fire'
 import { useIsMobile } from '../lib/useIsMobile'
 import { localSeaLevel } from '../lib/regionalSeaLevel'
 import { dropSubPixelParts } from '../lib/globeGeometry'
@@ -36,7 +37,7 @@ import {
   type RiverState,
 } from '../data/rivers'
 
-export type MapMode = 'temp' | 'loss' | 'rain'
+export type MapMode = 'temp' | 'loss' | 'rain' | 'fire'
 
 /**
  * The globe's own colours, per theme: the sky behind it, the glow around it,
@@ -516,6 +517,7 @@ export function EarthGlobe({
         futureMm: number
         deltaMm: number
         deltaFrac: number
+        fireIndex: number
       }
     >()
     for (const f of features) {
@@ -529,6 +531,7 @@ export function EarthGlobe({
       const frac = f.__risk ? fractionLostAtRise(f.__risk, localM) : 0
       const areaKm2 = f.__areaKm2 ?? 0
       const rain = estimateCountryRain(f, warmingC, sea.physics)
+      const fire = estimateCountryFire(f, warmingC, sea.physics)
       m.set(f.properties.id, {
         frac,
         absoluteC: estimateCountryTemp(f, warmingC, sea.physics).absoluteC,
@@ -536,6 +539,7 @@ export function EarthGlobe({
         futureMm: rain.futureMm,
         deltaMm: rain.deltaMm,
         deltaFrac: rain.deltaFrac,
+        fireIndex: fire.index,
       })
     }
     return m
@@ -623,6 +627,18 @@ export function EarthGlobe({
           light: isLightText(
             Math.abs(deltaFrac) * 20 + (deltaFrac < 0 ? 1 : 0),
           ),
+        })
+      } else if (mapMode === 'fire') {
+        const fire = metrics?.fireIndex ?? 0
+        labels.push({
+          id: f.properties.id,
+          name: f.properties.name,
+          lat: meta.lat,
+          lng: meta.lng,
+          text: fire.toFixed(0),
+          areaKm2: meta.areaKm2,
+          // The fire ramp darkens fast, so light text is needed sooner.
+          light: isLightText(fire / 14),
         })
       } else {
         const frac = metrics?.frac ?? 0
@@ -781,6 +797,9 @@ export function EarthGlobe({
             if (mapMode === 'rain') {
               return rainDeltaColor(metrics?.deltaFrac ?? 0, hovered)
             }
+            if (mapMode === 'fire') {
+              return fireColor(metrics?.fireIndex ?? 0, hovered)
+            }
             return lossColor(metrics?.frac ?? 0, hovered)
           }}
           polygonSideColor={NO_SIDE}
@@ -868,6 +887,22 @@ export function EarthGlobe({
             <span className="temp-legend-note">
               Labels = Δ rain % (hover for mm/yr). Lines are major rivers,
               blue = more flow, rust = less.
+            </span>
+          </>
+        ) : mapMode === 'fire' ? (
+          <>
+            <span className="temp-legend-title">Fire weather</span>
+            <div className="temp-legend-scale">
+              {FIRE_LEGEND.map((s) => (
+                <span key={s.label} className="temp-legend-stop">
+                  <i style={{ background: s.color }} />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <span className="temp-legend-note">
+              Labels = fire-weather index 0–100. Needs fuel, dryness and heat
+              together, so deserts and frozen ground stay low.
             </span>
           </>
         ) : (

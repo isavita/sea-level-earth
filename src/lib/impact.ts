@@ -3,9 +3,16 @@ import { computeLoss } from './landLoss'
 import { estimateCountryTemp } from './warming'
 import type { ScenarioPhysics } from './earthSystem'
 import { estimateCountryRain } from './rain'
+import { estimateCountryFire } from './fire'
 import { localSeaLevel } from './regionalSeaLevel'
 
-export type ImpactSortKey = 'area' | 'pct' | 'temp' | 'rain' | 'rainDelta'
+export type ImpactSortKey =
+  | 'area'
+  | 'pct'
+  | 'temp'
+  | 'rain'
+  | 'rainDelta'
+  | 'fire'
 
 /**
  * Everything needed to turn a global mean rise into the rise a given coast
@@ -45,6 +52,9 @@ export interface CountryImpactRow {
   localSeaLevelM: number
   /** Local rise ÷ global mean. */
   seaLevelRatio: number
+  /** Fire-weather index 0–100, and how far it has moved since the 2020s. */
+  fireIndex: number
+  fireDeltaIndex: number
 }
 
 export function rankByImpact(
@@ -77,6 +87,7 @@ export function rankByImpact(
       : null
     const temp = estimateCountryTemp(f, warmingC, sea.physics)
     const rain = estimateCountryRain(f, warmingC, sea.physics)
+    const fire = estimateCountryFire(f, warmingC, sea.physics)
     const areaKm2 = loss?.areaKm2 ?? f.__areaKm2 ?? 0
     if (areaKm2 <= 0) continue
     rows.push({
@@ -96,6 +107,8 @@ export function rankByImpact(
       futureMm: rain.futureMm,
       deltaMm: rain.deltaMm,
       deltaFrac: rain.deltaFrac,
+      fireIndex: fire.index,
+      fireDeltaIndex: fire.deltaIndex,
     })
   }
 
@@ -104,6 +117,7 @@ export function rankByImpact(
     if (sortBy === 'temp') return b.absoluteC - a.absoluteC
     if (sortBy === 'rain') return b.futureMm - a.futureMm
     if (sortBy === 'rainDelta') return b.deltaFrac - a.deltaFrac
+    if (sortBy === 'fire') return b.fireIndex - a.fireIndex
     return b.areaLostKm2 - a.areaLostKm2
   })
 

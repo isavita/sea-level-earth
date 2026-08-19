@@ -23,6 +23,7 @@ import {
   type SeaLevelContext,
 } from '../lib/impact'
 import { localSeaLevel, seaLevelNote } from '../lib/regionalSeaLevel'
+import { estimateCountryFire } from '../lib/fire'
 import type { MapMode } from './EarthGlobe'
 
 interface StatsPanelProps {
@@ -55,6 +56,7 @@ export function StatsPanel({
     let lost = 0
     let base = 0
     let hottest = 0
+    let worstFire = 0
     let wettestDelta = -Infinity
     let driestDelta = Infinity
     for (const f of features) {
@@ -62,6 +64,7 @@ export function StatsPanel({
       const temp = estimateCountryTemp(f, warmingC, sea.physics)
       const rain = estimateCountryRain(f, warmingC, sea.physics)
       hottest = Math.max(hottest, temp.absoluteC)
+      worstFire = Math.max(worstFire, estimateCountryFire(f, warmingC, sea.physics).index)
       wettestDelta = Math.max(wettestDelta, rain.deltaFrac)
       driestDelta = Math.min(driestDelta, rain.deltaFrac)
       if (!f.__risk) continue
@@ -81,6 +84,7 @@ export function StatsPanel({
       lost,
       pct: base > 0 ? lost / base : 0,
       hottest,
+      worstFire,
       wettestDelta: Number.isFinite(wettestDelta) ? wettestDelta : 0,
       driestDelta: Number.isFinite(driestDelta) ? driestDelta : 0,
     }
@@ -107,6 +111,11 @@ export function StatsPanel({
     return estimateCountryTemp(selected, warmingC, sea.physics)
   }, [selected, warmingC, sea])
 
+  const selectedFire = useMemo(() => {
+    if (!selected) return null
+    return estimateCountryFire(selected, warmingC, sea.physics)
+  }, [selected, warmingC, sea])
+
   const selectedRain = useMemo(() => {
     if (!selected) return null
     return estimateCountryRain(selected, warmingC, sea.physics)
@@ -130,7 +139,7 @@ export function StatsPanel({
       </header>
 
       {/* Radiogroup: picks the globe colouring, does not reveal panels. */}
-      <div className="map-mode-switch three" role="radiogroup" aria-label="Map colour">
+      <div className="map-mode-switch four" role="radiogroup" aria-label="Map colour">
         <button
           type="button"
           role="radio"
@@ -158,6 +167,18 @@ export function StatsPanel({
         <button
           type="button"
           role="radio"
+          aria-checked={mapMode === 'fire'}
+          className={mapMode === 'fire' ? 'active' : undefined}
+          onClick={() => {
+            onMapMode('fire')
+            setSortBy('fire')
+          }}
+        >
+          Fire
+        </button>
+        <button
+          type="button"
+          role="radio"
           aria-checked={mapMode === 'loss'}
           className={mapMode === 'loss' ? 'active' : undefined}
           onClick={() => {
@@ -177,15 +198,25 @@ export function StatsPanel({
         </div>
         <div>
           <span className="totals-label">
-            {mapMode === 'rain' ? 'Largest rain swings' : 'Hottest local warming'}
+            {mapMode === 'rain'
+              ? 'Largest rain swings'
+              : mapMode === 'fire'
+                ? 'Worst fire weather'
+                : 'Hottest local warming'}
           </span>
           <strong>
             {mapMode === 'rain'
               ? `${formatDeltaFrac(totals.wettestDelta)} / ${formatDeltaFrac(totals.driestDelta)}`
-              : `${formatAbsoluteC(totals.hottest)}°C`}
+              : mapMode === 'fire'
+                ? `${totals.worstFire.toFixed(0)} / 100`
+                : `${formatAbsoluteC(totals.hottest)}°C`}
           </strong>
           <em>
-            {mapMode === 'rain' ? 'wettest / driest Δ%' : 'vs pre-industrial'}
+            {mapMode === 'rain'
+              ? 'wettest / driest Δ%'
+              : mapMode === 'fire'
+                ? 'fire-weather index'
+                : 'vs pre-industrial'}
           </em>
         </div>
       </div>
@@ -198,7 +229,7 @@ export function StatsPanel({
               Clear
             </button>
           </div>
-          <dl className="country-metrics four five">
+          <dl className="country-metrics four five six">
             <div>
               <dt>Land lost</dt>
               <dd className="danger">
@@ -227,6 +258,19 @@ export function StatsPanel({
                 <span>{formatDeltaFrac(selectedRain.deltaFrac)}</span>
               </dd>
             </div>
+            {selectedFire && (
+              <div>
+                <dt>Fire weather</dt>
+                <dd className={selectedFire.index >= 42 ? 'danger' : undefined}>
+                  {selectedFire.index.toFixed(0)}
+                  <span>
+                    {selectedFire.fuelLimited
+                      ? 'too little to burn'
+                      : `${selectedFire.deltaIndex >= 0 ? '+' : '−'}${Math.abs(selectedFire.deltaIndex).toFixed(0)} since 2020s`}
+                  </span>
+                </dd>
+              </div>
+            )}
             {selectedSea && (
               <div>
                 <dt>Sea level here</dt>
@@ -312,11 +356,11 @@ export function StatsPanel({
               <th>
                 <button
                   type="button"
-                  className={sortBy === 'rain' ? 'sort-btn active' : 'sort-btn'}
-                  onClick={() => setSortBy('rain')}
-                  aria-pressed={sortBy === 'rain'}
+                  className={sortBy === 'fire' ? 'sort-btn active' : 'sort-btn'}
+                  onClick={() => setSortBy('fire')}
+                  aria-pressed={sortBy === 'fire'}
                 >
-                  mm{sortBy === 'rain' ? ' ↓' : ''}
+                  Fire{sortBy === 'fire' ? ' ↓' : ''}
                 </button>
               </th>
             </tr>
@@ -336,7 +380,7 @@ export function StatsPanel({
                   <td className={row.deltaMm < 0 ? 'rain-dry' : 'rain-wet'}>
                     {formatDeltaFrac(row.deltaFrac)}
                   </td>
-                  <td>{row.futureMm.toFixed(0)}</td>
+                  <td className="fire-cell">{row.fireIndex.toFixed(0)}</td>
                 </tr>
               )
             })}

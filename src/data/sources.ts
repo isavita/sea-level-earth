@@ -152,6 +152,153 @@ export interface ModelNote {
   body: string
 }
 
+/**
+ * A worked account of one layer of the model: what question it answers, the
+ * chain of steps that produce the number, and where that chain stops being
+ * trustworthy.
+ *
+ * The one-line `MODEL_NOTES` say *what* each layer does. These say *how*, in
+ * enough detail that a reader can decide whether to believe a given figure —
+ * which is the only honest way to present a model that looks this much like a
+ * forecast without being one.
+ */
+export interface ModelExplainer {
+  id: string
+  title: string
+  /** The question this layer exists to answer. */
+  question: string
+  /** Ordered steps, each a plain-language line of the calculation. */
+  steps: string[]
+  /** The key relationship, written out. */
+  formula?: string
+  /** What this layer cannot tell you. */
+  limits: string
+}
+
+export const MODEL_EXPLAINERS: ModelExplainer[] = [
+  {
+    id: 'pathway',
+    title: 'From a pathway to a year',
+    question: 'What is the global temperature and sea level in the year on the slider?',
+    steps: [
+      'Each pathway stores six anchor years — 2020, 2030, 2050, 2100, 2150 and 2300 — for both global mean warming and global mean sea level.',
+      'Anchors are shaped to IPCC AR6 central estimates. The 6°C and 8°C paths sit deliberately beyond the assessed ranges as stress tests.',
+      'Any year between anchors is a straight-line interpolation; before the first or after the last anchor the value is held flat.',
+      'Everything else in the app is driven from those two numbers, so the whole map is a function of a single point on a single curve.',
+    ],
+    formula:
+      'value(year) = v₀ + (v₁ − v₀) × (year − y₀) ÷ (y₁ − y₀), between the surrounding anchors',
+    limits:
+      'Linear interpolation smooths over the real shape between anchors, and a single global curve cannot represent year-to-year variability, volcanoes or El Niño. The curve is the assumption, not a result.',
+  },
+  {
+    id: 'temperature',
+    title: 'Global warming to local warming',
+    question: 'Why does one country warm faster than another under the same pathway?',
+    steps: [
+      'Start from the pathway\u2019s global mean warming for that year.',
+      'Multiply by a zonal ratio read off the country\u2019s latitude. The profile is asymmetric: the Arctic runs 2–3× the global rate, while the Southern Ocean is the slowest-warming water on Earth and Antarctica sits near the global mean.',
+      'Apply land–sea contrast. Continentality is estimated as area ÷ perimeter — how far a typical point sits from the coast — which sorts sensibly from the Bahamas at 5 km to Brazil at 374 km.',
+      'Apply the North Atlantic warming hole, a local damping centred on the subpolar gyre south of Greenland.',
+      'Earth-system pathways then add their own patterns on top: a stronger albedo feedback weighted to ice and snow, and aerosol unmasking weighted to the industrial northern hemisphere.',
+      'Finally, subtract any Atlantic-circulation cooling. That term is absolute rather than a multiplier, because it is the one mechanism that can leave a region colder than it started.',
+    ],
+    formula:
+      'local °C = global °C × (zonal × land–sea × warming-hole + albedo + aerosol) − AMOC cooling',
+    limits:
+      'A country-sized average of a field that varies enormously inside big countries, with no altitude, vegetation or urban effects. It is a sketch of the pattern, not a downscaled model run.',
+  },
+  {
+    id: 'sealevel',
+    title: 'Global sea level to a specific coast',
+    question: 'Why does the same global rise flood one country and spare another?',
+    steps: [
+      'Split the global rise into four contributors — thermal expansion, mountain glaciers, Greenland and Antarctica — in proportions taken from AR6. Ice-sheet instability shifts that split toward Antarctica, which changes the pattern as well as the total.',
+      'Give each mass contributor a gravitational fingerprint. A shrinking ice sheet\u2019s pull weakens, so relative sea level actually falls within roughly 2,000 km of it and overshoots by 10–30% in the far field.',
+      'Add ocean dynamics: a slowing Atlantic circulation banks water against north-east North America. This one is measured to the nearest point of the country\u2019s coastline rather than its centroid, because the effect fades within about 1,300 km and most large countries have their middle far inland.',
+      'Add vertical land motion, in mm/yr multiplied by the years since the 1995–2014 baseline. Post-glacial rebound lifts Scandinavia faster than the sea rises; groundwater extraction sinks deltas faster still.',
+      'The result is a local rise in metres, which is what the land-loss calculation is then run against.',
+    ],
+    formula:
+      'local rise = global × (fingerprints + dynamics) + land motion × years since 2005',
+    limits:
+      'One number per country for something that varies along every coastline, and Jakarta sinks an order of magnitude faster than Indonesia\u2019s average here. Not a flood map and not a planning number.',
+  },
+  {
+    id: 'landloss',
+    title: 'A local rise to land lost',
+    question: 'How does a rise in metres become an area in km²?',
+    steps: [
+      'Each country carries a measured share of land below 5 m — the low-elevation coastal zone — from the World Bank\u2019s indicator, itself derived from CIESIN\u2019s elevation dataset.',
+      'That single measured point is expanded into a small elevation curve at 1, 2, 3, 5, 7 and 10 m, using a fixed shape scaled to the country\u2019s own 5 m value.',
+      'The local sea-level rise is looked up on that curve, interpolating between the bracketing heights, to give the fraction of land below the new sea level.',
+      'Multiply that fraction by the country\u2019s land area.',
+    ],
+    formula: 'land lost = area × fractionBelow(local rise)',
+    limits:
+      'This is exposure by elevation and nothing else. It ignores flood defences, sediment supply, and the difference between land that floods once a decade and land that is permanently under water. Real losses depend on dikes and deltas as much as on elevation.',
+  },
+  {
+    id: 'rain',
+    title: 'Rainfall',
+    question: 'Where does it get wetter, and where does it dry out?',
+    steps: [
+      'Start from a measured baseline: World Bank annual precipitation where it exists, otherwise a latitude climatology, and the panel marks which is in use.',
+      'Apply a zonal sensitivity per °C of warming above the 2020s — wetter in the deep tropics and at high latitudes, drier through the subtropics.',
+      'Apply regional corrections where latitude alone gets the sign wrong: the monsoons, the Mediterranean, southwest North America, southern Africa, Chile, southern Australia and eastern Amazonia.',
+      'Damp the relative swing in very dry countries, where a small absolute change is a huge percentage.',
+      'Under a stalled Atlantic circulation, add the southward shift of the tropical rain belt. That is a change in where rain falls rather than a response to temperature, so it is added on top rather than scaled by warming.',
+    ],
+    formula:
+      'Δrain = sensitivity(lat, region) × warming above 2020s × dryness damping + circulation shift',
+    limits:
+      'Annual totals only. It says nothing about whether the rain arrives as useful soaking or as a flood, and the intensification of extreme rainfall is a bigger deal than the change in the annual mean.',
+  },
+  {
+    id: 'fire',
+    title: 'Fire weather',
+    question: 'Where does warming actually make fire more likely?',
+    steps: [
+      'Fire needs three things at once: fuel to burn, dry fuel, and air thirsty enough to keep it dry. Modelling it as a straight function of temperature would rank the Sahara as the most flammable place on Earth.',
+      'Estimate the warm-season temperature, not the annual mean. Fire is a summer event, and the annual mean hides it — Siberia averages about −5°C and still burns, because its summers reach the high teens. The seasonal swing comes from latitude and continentality.',
+      'Convert that to vapour pressure deficit: how much more moisture the air could hold than it does. Saturation vapour pressure follows Clausius–Clapeyron and rises about 7% per °C, so drying power accelerates with warming even where rainfall is unchanged.',
+      'Estimate fuel from annual rainfall. It rises steeply out of true desert and saturates once there is a closed canopy.',
+      'Damp permanently wet forest, which carries huge fuel loads but rarely burns — unless the pathway is drying it, which is the Amazon dieback route.',
+      'Weight by the share of the year warm enough to burn, so a short but ferocious boreal season still counts.',
+    ],
+    formula:
+      'index = drying power (VPD) × fuel available × √(season length) × wet-forest damping',
+    limits:
+      'This is fire weather, not fire itself. It has no ignition source, no wind, no fuel management, and no people — and most fires are started by people. A high index means the conditions are there, not that the land will burn.',
+  },
+  {
+    id: 'rivers',
+    title: 'River flow',
+    question: 'Why do some rivers rise before they fall?',
+    steps: [
+      'Combine three competing sources: glacier melt, snowpack, and rainfall net of evaporation.',
+      'Glacier melt follows a peak-water curve — more ice melts each year until so little ice is left that the melt contribution collapses.',
+      'Snowpack loss scales with how warm the basin is getting, since more precipitation falls as rain and melts sooner.',
+      'Rainfall net of evaporation uses the rainfall model, minus the extra evaporative demand that warming creates.',
+      'The sum is why a glacier-fed river can gain flow for decades and then lose most of it, and why a basin can keep its rainfall and still lose its river.',
+    ],
+    limits:
+      'Basin-scale and annual. It does not model reservoirs, abstraction for irrigation, or the seasonal timing that actually determines whether a crop survives.',
+  },
+  {
+    id: 'ice',
+    title: 'Ice',
+    question: 'How fast do the sea ice and the ice sheets go?',
+    steps: [
+      'Arctic September sea ice is treated as near-linear in global warming, which is what AR6 finds — there is no classical tipping point in the observations or the models.',
+      'The Greenland and Antarctic ice sheets move on century-to-millennial clocks, so their bars change slowly even under extreme forcing.',
+      'The first ice-free September is looked up per pathway. Earth-system pathways cluster earlier, because the mechanisms that define them act on the Arctic first — with one exception: a stalled Atlantic circulation slows the northward heat transport eroding the ice from below, and buys it a couple of decades.',
+    ],
+    limits:
+      'The committed loss is far larger than the loss shown by 2300. The bars answer "how much has gone by then", not "how much is already unavoidable", and for the ice sheets those are very different numbers.',
+  },
+]
+
 /** How each layer of this app is actually computed. */
 export const MODEL_NOTES: ModelNote[] = [
   {
@@ -181,6 +328,10 @@ export const MODEL_NOTES: ModelNote[] = [
   {
     title: 'Land lost to the sea',
     body: 'Each country carries a measured share of land below 5 m (the low-elevation coastal zone), and losses at other heights are interpolated from that share. Rise is resolved per coast rather than globally: melting ice sheets pull the ocean toward them, so relative sea level falls near a shrinking one and overshoots by 10–30% in the far field; a slowing Atlantic circulation banks water on north-east North America; and land motion — post-glacial rebound lifting Scandinavia, groundwater extraction sinking deltas — can outweigh the climate signal. Exposure by elevation, not flood defences, sediment gain, or where a specific city floods.',
+  },
+  {
+    title: 'Fire weather',
+    body: 'Fire needs fuel, dryness and heat at the same time, so it is modelled as a product of three terms rather than as a function of temperature — which would rank the Sahara as the most flammable place on Earth. The drying term is vapour pressure deficit evaluated at the warm-season temperature, not the annual mean: fire is a summer event, and Siberia averages about −5°C while still burning millions of hectares. VPD rises roughly 7% per °C by Clausius–Clapeyron, so the drying power of the air accelerates with warming even where rainfall holds steady. This is fire weather, not fire: there is no ignition, no wind and no people in it.',
   },
   {
     title: 'Rainfall',

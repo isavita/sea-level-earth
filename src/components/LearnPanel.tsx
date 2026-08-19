@@ -1,6 +1,7 @@
 import {
   DATA_SOURCES,
   LIMITS_NOTE,
+  MODEL_EXPLAINERS,
   MODEL_NOTES,
   READING_GROUPS,
 } from '../data/sources'
@@ -10,14 +11,46 @@ export function LearnPanel() {
     <section className="panel learn-panel">
       <header className="panel-head">
         <p className="eyebrow">Go deeper</p>
-        <h2>Learn & sources</h2>
+        <h2>How this works</h2>
       </header>
 
       <p className="learn-intro">
-        Everything here is a simplified model. These are the places that do it
-        properly — start with the simulators if you want to turn the dials
-        yourself.
+        Every number on this globe is computed in your browser from a handful of
+        curves and patterns. Nothing is looked up from a forecast. This is the
+        whole chain, layer by layer — including where each one stops being
+        trustworthy.
       </p>
+
+      {/* The calculation itself, before the reading list: someone asking "how
+          is this worked out" should not have to scroll past a link farm. */}
+      <div className="explainers">
+        {MODEL_EXPLAINERS.map((m, i) => (
+          <details className="explainer" key={m.id}>
+            <summary>
+              <span className="explainer-step" aria-hidden>
+                {i + 1}
+              </span>
+              <span className="explainer-title">{m.title}</span>
+            </summary>
+            <p className="explainer-question">{m.question}</p>
+            <ol className="explainer-steps">
+              {m.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            {m.formula && (
+              <p className="explainer-formula">
+                <code>{m.formula}</code>
+              </p>
+            )}
+            <p className="explainer-limits">
+              <strong>What it cannot tell you.</strong> {m.limits}
+            </p>
+          </details>
+        ))}
+      </div>
+
+      <p className="limits-note">{LIMITS_NOTE}</p>
 
       {READING_GROUPS.map((group) => (
         <div key={group.heading} className="reading-group">
@@ -50,7 +83,7 @@ export function LearnPanel() {
       ))}
 
       <details className="scenario-details">
-        <summary>How this model works</summary>
+        <summary>Every layer in one line</summary>
         <ul className="note-list">
           {MODEL_NOTES.map((n) => (
             <li key={n.title}>
@@ -70,8 +103,6 @@ export function LearnPanel() {
           ))}
         </ul>
       </details>
-
-      <p className="limits-note">{LIMITS_NOTE}</p>
     </section>
   )
 }

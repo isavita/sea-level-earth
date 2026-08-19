@@ -1181,6 +1181,126 @@ input[type='range']::-moz-range-thumb {
   color: color-mix(in srgb, var(--cold) 75%, var(--dim));
 }
 
+.country-metrics.six > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.fire-cell {
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Model explainers ----------------------------------------------------
+   The "how is this actually calculated" stack in the Learn panel. Numbered so
+   the chain reads as a sequence, and collapsed by default so the panel is
+   scannable before it is exhaustive. */
+
+.explainers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.explainer {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: 0.55rem 0.7rem;
+}
+
+.explainer > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0.2rem 0;
+}
+
+.explainer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.explainer-step {
+  flex: none;
+  width: 1.45rem;
+  height: 1.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 18%, transparent);
+  color: var(--teal-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.explainer-title {
+  font-weight: 650;
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+
+.explainer[open] .explainer-step {
+  background: var(--teal);
+  color: var(--on-accent);
+}
+
+.explainer-question {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.explainer-steps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.explainer-steps li::marker {
+  color: var(--teal);
+  font-variant-numeric: tabular-nums;
+}
+
+.explainer-formula {
+  margin: 0.6rem 0 0;
+  overflow-x: auto;
+}
+
+.explainer-formula code {
+  display: block;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-hi);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.explainer-limits {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--dim);
+  padding-left: 0.65rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.explainer-limits strong {
+  color: var(--accent-ink);
+}
+
 /* --- Ice ----------------------------------------------------------------- */
 
 .ice-meters {
@@ -1830,6 +1950,13 @@ input[type='range']::-moz-range-thumb {
 
 .map-mode-switch.three {
   grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Four map modes no longer fit on one phone row; wrap to two. */
+.map-mode-switch.four {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
 }
 
 .map-mode-switch button {

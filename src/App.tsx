@@ -244,7 +244,9 @@ function AppShell() {
                 ? 'temperature'
                 : mapMode === 'rain'
                   ? 'rain'
-                  : 'land loss'}
+                  : mapMode === 'fire'
+                    ? 'fire weather'
+                    : 'land loss'}
             </span>
           </div>
         </div>
