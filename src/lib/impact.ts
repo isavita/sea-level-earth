@@ -4,6 +4,11 @@ import { estimateCountryTemp } from './warming'
 import type { ScenarioPhysics } from './earthSystem'
 import { estimateCountryRain } from './rain'
 import { estimateCountryFire } from './fire'
+import { estimateCountryDrought, type AridityClass } from './drought'
+import {
+  estimateCountryHumidHeat,
+  type HabitabilityBand,
+} from './humidHeat'
 import { localSeaLevel } from './regionalSeaLevel'
 
 export type ImpactSortKey =
@@ -13,6 +18,9 @@ export type ImpactSortKey =
   | 'rain'
   | 'rainDelta'
   | 'fire'
+  | 'burnedArea'
+  | 'drought'
+  | 'humidHeat'
 
 /**
  * Everything needed to turn a global mean rise into the rise a given coast
@@ -55,6 +63,25 @@ export interface CountryImpactRow {
   /** Fire-weather index 0–100, and how far it has moved since the 2020s. */
   fireIndex: number
   fireDeltaIndex: number
+  /** Modelled burned area in km²/yr, the share of the country it is, and the
+   *  number of days a year the land is flammable. */
+  fireBurnedKm2: number
+  fireBurnedFraction: number
+  fireSeasonDays: number
+  /** Water balance: standardised drying, aridity class and P − PET in mm/yr. */
+  droughtAnomaly: number
+  aridityClass: AridityClass
+  waterBalanceMm: number
+  /**
+   * Humid heat: the wet bulb reached about one day a year, how far past the
+   * outdoor-labour threshold the year runs, and the people behind it.
+   */
+  peakWetBulbC: number
+  wetBulbDeltaC: number
+  daysAbove28: number
+  daysAbove31: number
+  habitability: HabitabilityBand
+  populationM: number
 }
 
 export function rankByImpact(
@@ -88,6 +115,8 @@ export function rankByImpact(
     const temp = estimateCountryTemp(f, warmingC, sea.physics)
     const rain = estimateCountryRain(f, warmingC, sea.physics)
     const fire = estimateCountryFire(f, warmingC, sea.physics)
+    const water = estimateCountryDrought(f, warmingC, sea.physics)
+    const humid = estimateCountryHumidHeat(f, warmingC, sea.physics)
     const areaKm2 = loss?.areaKm2 ?? f.__areaKm2 ?? 0
     if (areaKm2 <= 0) continue
     rows.push({
@@ -109,6 +138,18 @@ export function rankByImpact(
       deltaFrac: rain.deltaFrac,
       fireIndex: fire.index,
       fireDeltaIndex: fire.deltaIndex,
+      fireBurnedKm2: fire.burnedKm2,
+      fireBurnedFraction: fire.burnedFraction,
+      fireSeasonDays: fire.seasonDays,
+      droughtAnomaly: water.anomaly,
+      aridityClass: water.aridityClass,
+      waterBalanceMm: water.balanceMm,
+      peakWetBulbC: humid.peakWetBulbC,
+      wetBulbDeltaC: humid.deltaPeakC,
+      daysAbove28: humid.daysAbove28,
+      daysAbove31: humid.daysAbove31,
+      habitability: humid.band,
+      populationM: humid.populationM,
     })
   }
 
@@ -118,6 +159,10 @@ export function rankByImpact(
     if (sortBy === 'rain') return b.futureMm - a.futureMm
     if (sortBy === 'rainDelta') return b.deltaFrac - a.deltaFrac
     if (sortBy === 'fire') return b.fireIndex - a.fireIndex
+    if (sortBy === 'burnedArea') return b.fireBurnedKm2 - a.fireBurnedKm2
+    // Drying sorts worst-first, so the most negative anomaly leads.
+    if (sortBy === 'drought') return a.droughtAnomaly - b.droughtAnomaly
+    if (sortBy === 'humidHeat') return b.peakWetBulbC - a.peakWetBulbC
     return b.areaLostKm2 - a.areaLostKm2
   })
 

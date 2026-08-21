@@ -1126,13 +1126,12 @@ input[type='range']::-moz-range-thumb {
   gap: 0.55rem 0.4rem;
 }
 
-.country-metrics.four {
+/* Eight, ten or twelve metrics fill a 2-up grid exactly — even rows, no cell
+   left to span and no hole. The three-column base is for any shorter card. */
+.country-metrics.eight,
+.country-metrics.ten,
+.country-metrics.twelve {
   grid-template-columns: repeat(2, 1fr);
-}
-
-/* Five metrics in a 2-up grid leaves a lone cell — let the last one span. */
-.country-metrics.five > div:last-child {
-  grid-column: 1 / -1;
 }
 
 .sea-note {
@@ -1181,13 +1180,70 @@ input[type='range']::-moz-range-thumb {
   color: color-mix(in srgb, var(--cold) 75%, var(--dim));
 }
 
-.country-metrics.six > div:last-child {
-  grid-column: 1 / -1;
-}
-
 .fire-cell {
   color: var(--accent-ink);
   font-variant-numeric: tabular-nums;
+}
+
+/* A wet bulb below the 31°C rest limit reads as ordinary text; `.rain-dry`
+   takes over past it, the same boundary the habitability bands use. */
+.wetbulb-cell {
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+/* --- Humid-heat population ladder ---------------------------------------
+   Population by habitability band, worst first. A key and a table at once:
+   the swatch is the map's own ramp evaluated inside that band, so a reader
+   can match a colour on the globe to a headcount without a legend lookup. */
+.exposure-bands {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  display: grid;
+  gap: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.exposure-bands li {
+  display: grid;
+  grid-template-columns: 0.65rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.exposure-swatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  display: block;
+}
+
+.exposure-label {
+  color: var(--muted);
+  /* Long band names must not push the headcount off the row on a phone. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exposure-bands strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  color: var(--ink);
+}
+
+/* Drying that has not crossed into the strong-drying band reads as ordinary
+   text; `.rain-dry` takes over past −0.45σ, the same boundary the band labels
+   use. */
+.drought-cell {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
 
 /* --- Model explainers ----------------------------------------------------
@@ -1959,6 +2015,37 @@ input[type='range']::-moz-range-thumb {
   gap: 0.25rem;
 }
 
+/* Five would leave a stray half-row in a 2-up grid, so the last one spans. */
+.map-mode-switch.five {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+}
+
+.map-mode-switch.five > button:last-child {
+  grid-column: 1 / -1;
+}
+
+/* Six fills a 3-up grid exactly — two even rows, nothing to span. Three across
+   is the most that stays legible: at 375px each cell is about 108px, which
+   holds "Temperature" and "Humid heat" at the size below without wrapping. Two
+   across would have made the switch six rows tall on a phone and pushed the
+   totals off screen. */
+.map-mode-switch.six {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+}
+
+/* The longest labels only just fit three across on a narrow phone, so the
+   type comes down slightly and the horizontal padding gets out of the way.
+   Applied to the six-up variant alone; the shorter switches keep their size. */
+.map-mode-switch.six > button {
+  padding-inline: 0.15rem;
+  font-size: 0.72rem;
+  hyphens: auto;
+}
+
 .map-mode-switch button {
   appearance: none;
   border: none;
@@ -2480,10 +2567,14 @@ tbody tr.active {
     max-height: 62vh;
   }
 
-  /* Drop the absolute-rainfall column so the remaining four fit without
-     sideways scrolling; the Δ rain % beside it carries the same story. */
+  /* Drop the drying and fire-index columns so the remaining five fit without
+     sideways scrolling. Both are the dimensionless ones: the burned-area column
+     next to them says the same thing in km², and the globe's own labels still
+     carry the fire index. */
   table th:nth-child(5),
-  table td:nth-child(5) {
+  table td:nth-child(5),
+  table th:nth-child(6),
+  table td:nth-child(6) {
     display: none;
   }
 
@@ -2522,7 +2613,9 @@ tbody tr.active {
     display: none;
   }
 
-  .country-metrics.four {
+  .country-metrics.eight,
+  .country-metrics.ten,
+  .country-metrics.twelve {
     gap: 0.6rem 0.5rem;
   }
 

@@ -1,6 +1,6 @@
-import { geoCentroid } from 'd3-geo'
 import { lift } from './mapColor'
 import type { CountryFeature } from './countries'
+import { countryCentroid } from './warming'
 import {
   amocRainfallShift,
   NEUTRAL_PHYSICS,
@@ -29,8 +29,7 @@ export interface CountryRain {
 
 /** Rough global-mean annual precip by absolute latitude when WB data is missing. */
 export function precipFallbackMm(feature: CountryFeature): number {
-  const [, lat] = geoCentroid(feature)
-  const absLat = Math.abs(lat || 0)
+  const absLat = Math.abs(countryCentroid(feature).lat)
   // Crude climatology: wet tropics, dry subtropics, moderate mid-lats, drier polar
   if (absLat < 10) return 2200
   if (absLat < 20) return 1400
@@ -113,24 +112,9 @@ function regionalSensAdjust(lat: number, lng: number): number {
  * Fractional precip change per °C of *extra* warming above ~2020s (~1.15°C).
  * Positive = wetter. AR6-shaped sketch, not a GCM downscale.
  */
-/** Centroid accessors, guarded against the degenerate geometries. */
-function safeLat(feature: CountryFeature): number {
-  const [, lat] = geoCentroid(feature)
-  return Number.isFinite(lat) ? lat : 0
-}
-
-function safeLng(feature: CountryFeature): number {
-  const [lng] = geoCentroid(feature)
-  return Number.isFinite(lng) ? lng : 0
-}
-
 export function precipSensitivityPerC(feature: CountryFeature): number {
-  const [lng, lat] = geoCentroid(feature)
-  const safeLat = lat || 0
-  const safeLng = lng || 0
-  return (
-    zonalSensPerC(Math.abs(safeLat)) + regionalSensAdjust(safeLat, safeLng)
-  )
+  const { lat, lng } = countryCentroid(feature)
+  return zonalSensPerC(Math.abs(lat)) + regionalSensAdjust(lat, lng)
 }
 
 export function estimateCountryRain(
@@ -152,11 +136,8 @@ export function estimateCountryRain(
   // A stalling Atlantic circulation drags the tropical rain belt south, which
   // is a shift in *where* the rain falls rather than a response to warming — so
   // it is added on top rather than scaled by the temperature change.
-  const circulation = amocRainfallShift(
-    safeLat(feature),
-    safeLng(feature),
-    physics.amocWeakening,
-  )
+  const { lat, lng } = countryCentroid(feature)
+  const circulation = amocRainfallShift(lat, lng, physics.amocWeakening)
   const deltaFrac = sens * extraWarming * damp + circulation
   const futureMm = Math.max(5, baselineMm * (1 + deltaFrac))
   const deltaMm = futureMm - baselineMm

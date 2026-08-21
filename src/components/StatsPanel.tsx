@@ -23,7 +23,31 @@ import {
   type SeaLevelContext,
 } from '../lib/impact'
 import { localSeaLevel, seaLevelNote } from '../lib/regionalSeaLevel'
-import { estimateCountryFire } from '../lib/fire'
+import {
+  estimateCountryFire,
+  formatBurnedArea,
+  formatSeasonDays,
+} from '../lib/fire'
+import {
+  droughtBandLabel,
+  dryQuarterLabel,
+  estimateCountryDrought,
+  formatAnomaly,
+  formatAridity,
+  formatBalanceMm,
+} from '../lib/drought'
+import {
+  estimateCountryHumidHeat,
+  formatHeatDays,
+  formatPeopleM,
+  formatWetBulbC,
+  habitabilityBlurb,
+  habitabilityColor,
+  habitabilityLabel,
+  monthName,
+  HABITABILITY_ORDER,
+  type HabitabilityBand,
+} from '../lib/humidHeat'
 import type { MapMode } from './EarthGlobe'
 
 interface StatsPanelProps {
@@ -57,16 +81,37 @@ export function StatsPanel({
     let base = 0
     let hottest = 0
     let worstFire = 0
+    let burnedKm2 = 0
     let wettestDelta = -Infinity
     let driestDelta = Infinity
+    let worstDrying = Infinity
+    let dryland = 0
+    let counted = 0
+    let worstWetBulb = -Infinity
+    // People are counted into the band their country's yearly peak falls in —
+    // a country-level statement, not a claim about where anyone lives.
+    const peopleByBand = Object.fromEntries(
+      HABITABILITY_ORDER.map((band) => [band, 0]),
+    ) as Record<HabitabilityBand, number>
     for (const f of features) {
       if (!f.__areaKm2) continue
       const temp = estimateCountryTemp(f, warmingC, sea.physics)
       const rain = estimateCountryRain(f, warmingC, sea.physics)
       hottest = Math.max(hottest, temp.absoluteC)
-      worstFire = Math.max(worstFire, estimateCountryFire(f, warmingC, sea.physics).index)
+      const fire = estimateCountryFire(f, warmingC, sea.physics)
+      worstFire = Math.max(worstFire, fire.index)
+      burnedKm2 += fire.burnedKm2
       wettestDelta = Math.max(wettestDelta, rain.deltaFrac)
       driestDelta = Math.min(driestDelta, rain.deltaFrac)
+      const water = estimateCountryDrought(f, warmingC, sea.physics)
+      worstDrying = Math.min(worstDrying, water.anomaly)
+      const humid = estimateCountryHumidHeat(f, warmingC, sea.physics)
+      worstWetBulb = Math.max(worstWetBulb, humid.peakWetBulbC)
+      peopleByBand[humid.band] += humid.populationM
+      // Dryland share is counted by country, not by area — the panel is a
+      // country leaderboard and an area weighting would just restate Russia.
+      counted += 1
+      if (water.aridityClass !== 'humid') dryland += 1
       if (!f.__risk) continue
       const local = localSeaLevel(
         f,
@@ -85,8 +130,17 @@ export function StatsPanel({
       pct: base > 0 ? lost / base : 0,
       hottest,
       worstFire,
+      burnedKm2,
       wettestDelta: Number.isFinite(wettestDelta) ? wettestDelta : 0,
       driestDelta: Number.isFinite(driestDelta) ? driestDelta : 0,
+      worstDrying: Number.isFinite(worstDrying) ? worstDrying : 0,
+      drylandPct: counted > 0 ? dryland / counted : 0,
+      worstWetBulb: Number.isFinite(worstWetBulb) ? worstWetBulb : 0,
+      peopleByBand,
+      // The headline number for this layer: people in countries whose yearly
+      // peak has passed the point where rest in the shade stops being safe.
+      peopleAtRisk:
+        peopleByBand['rest-limited'] + peopleByBand['beyond-survivable'],
     }
   }, [features, sea, warmingC])
 
@@ -116,6 +170,16 @@ export function StatsPanel({
     return estimateCountryFire(selected, warmingC, sea.physics)
   }, [selected, warmingC, sea])
 
+  const selectedDrought = useMemo(() => {
+    if (!selected) return null
+    return estimateCountryDrought(selected, warmingC, sea.physics)
+  }, [selected, warmingC, sea])
+
+  const selectedHumidHeat = useMemo(() => {
+    if (!selected) return null
+    return estimateCountryHumidHeat(selected, warmingC, sea.physics)
+  }, [selected, warmingC, sea])
+
   const selectedRain = useMemo(() => {
     if (!selected) return null
     return estimateCountryRain(selected, warmingC, sea.physics)
@@ -135,11 +199,11 @@ export function StatsPanel({
     <section className="panel stats">
       <header className="panel-head">
         <p className="eyebrow">Territory</p>
-        <h2>Land, heat & rain</h2>
+        <h2>Land, heat & water</h2>
       </header>
 
       {/* Radiogroup: picks the globe colouring, does not reveal panels. */}
-      <div className="map-mode-switch four" role="radiogroup" aria-label="Map colour">
+      <div className="map-mode-switch six" role="radiogroup" aria-label="Map colour">
         <button
           type="button"
           role="radio"
@@ -163,6 +227,30 @@ export function StatsPanel({
           }}
         >
           Rain
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mapMode === 'drought'}
+          className={mapMode === 'drought' ? 'active' : undefined}
+          onClick={() => {
+            onMapMode('drought')
+            setSortBy('drought')
+          }}
+        >
+          Drought
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mapMode === 'humidheat'}
+          className={mapMode === 'humidheat' ? 'active' : undefined}
+          onClick={() => {
+            onMapMode('humidheat')
+            setSortBy('humidHeat')
+          }}
+        >
+          Humid heat
         </button>
         <button
           type="button"
@@ -201,25 +289,57 @@ export function StatsPanel({
             {mapMode === 'rain'
               ? 'Largest rain swings'
               : mapMode === 'fire'
-                ? 'Worst fire weather'
-                : 'Hottest local warming'}
+                ? 'Land burning per year'
+                : mapMode === 'drought'
+                  ? 'Sharpest drying'
+                  : mapMode === 'humidheat'
+                    ? 'People past the rest limit'
+                    : 'Hottest local warming'}
           </span>
           <strong>
             {mapMode === 'rain'
               ? `${formatDeltaFrac(totals.wettestDelta)} / ${formatDeltaFrac(totals.driestDelta)}`
               : mapMode === 'fire'
-                ? `${totals.worstFire.toFixed(0)} / 100`
-                : `${formatAbsoluteC(totals.hottest)}°C`}
+                ? formatArea(totals.burnedKm2)
+                : mapMode === 'drought'
+                  ? formatAnomaly(totals.worstDrying)
+                  : mapMode === 'humidheat'
+                    ? formatPeopleM(totals.peopleAtRisk)
+                    : `${formatAbsoluteC(totals.hottest)}°C`}
           </strong>
           <em>
             {mapMode === 'rain'
               ? 'wettest / driest Δ%'
               : mapMode === 'fire'
-                ? 'fire-weather index'
-                : 'vs pre-industrial'}
+                ? `modelled burned area; worst fire weather ${totals.worstFire.toFixed(0)} / 100`
+                : mapMode === 'drought'
+                  ? `${formatPct(totals.drylandPct)} of countries are drylands`
+                  : mapMode === 'humidheat'
+                    ? `in countries past 31°C wet bulb; worst peak ${formatWetBulbC(totals.worstWetBulb)}`
+                    : 'vs pre-industrial'}
           </em>
         </div>
       </div>
+
+      {/* The whole point of this layer is the headcount, and a single headline
+          band hides where the rest of the world sits — so the full ladder is
+          shown, worst first. Only in this mode: it would be noise in the other
+          five. */}
+      {mapMode === 'humidheat' && (
+        <ul className="exposure-bands">
+          {[...HABITABILITY_ORDER].reverse().map((band) => (
+            <li key={band}>
+              <i
+                className="exposure-swatch"
+                style={{ background: habitabilityColor(band) }}
+                aria-hidden
+              />
+              <span className="exposure-label">{habitabilityLabel(band)}</span>
+              <strong>{formatPeopleM(totals.peopleByBand[band])}</strong>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {selected && selectedTemp && selectedRain && (
         <article className="country-card">
@@ -229,7 +349,7 @@ export function StatsPanel({
               Clear
             </button>
           </div>
-          <dl className="country-metrics four five six">
+          <dl className="country-metrics twelve">
             <div>
               <dt>Land lost</dt>
               <dd className="danger">
@@ -258,6 +378,69 @@ export function StatsPanel({
                 <span>{formatDeltaFrac(selectedRain.deltaFrac)}</span>
               </dd>
             </div>
+            {selectedDrought && (
+              <div>
+                <dt>Water balance</dt>
+                <dd
+                  className={
+                    selectedDrought.anomaly <= -1 ? 'danger' : undefined
+                  }
+                >
+                  {formatBalanceMm(selectedDrought.balanceMm)}
+                  <span>
+                    rain minus demand ·{' '}
+                    {formatAnomaly(selectedDrought.anomaly)},{' '}
+                    {droughtBandLabel(selectedDrought.band)}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {selectedDrought && (
+              <div>
+                <dt>Aridity</dt>
+                <dd>
+                  {formatAridity(selectedDrought.aridity)}
+                  <span>
+                    {selectedDrought.frozenGround
+                      ? 'polar ground — a soil column is the wrong model here'
+                      : `${selectedDrought.aridityClass}, from ${formatAridity(selectedDrought.baselineAridity)}`}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {selectedHumidHeat && (
+              <div>
+                <dt>Humid heat</dt>
+                <dd
+                  className={
+                    selectedHumidHeat.peakWetBulbC >= 31 ? 'danger' : undefined
+                  }
+                >
+                  {formatWetBulbC(selectedHumidHeat.peakWetBulbC)}
+                  <span>
+                    wet bulb once a year ·{' '}
+                    {habitabilityLabel(selectedHumidHeat.band).toLowerCase()}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {selectedHumidHeat && (
+              <div>
+                <dt>Dangerous days</dt>
+                <dd
+                  className={
+                    selectedHumidHeat.daysAbove31 >= 1 ? 'danger' : undefined
+                  }
+                >
+                  {formatHeatDays(selectedHumidHeat.daysAbove28)}
+                  <span>
+                    above 28°C wet bulb ·{' '}
+                    {formatHeatDays(selectedHumidHeat.daysAbove31)} above 31°C ·{' '}
+                    {formatHeatDays(selectedHumidHeat.daysAbove35)} above 35°C
+                  </span>
+                </dd>
+              </div>
+            )}
             {selectedFire && (
               <div>
                 <dt>Fire weather</dt>
@@ -267,6 +450,38 @@ export function StatsPanel({
                     {selectedFire.fuelLimited
                       ? 'too little to burn'
                       : `${selectedFire.deltaIndex >= 0 ? '+' : '−'}${Math.abs(selectedFire.deltaIndex).toFixed(0)} since 2020s`}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {selectedFire && (
+              <div>
+                <dt>Burned area</dt>
+                <dd
+                  className={
+                    selectedFire.burnedKm2 > selectedFire.baselineBurnedKm2 * 1.25
+                      ? 'danger'
+                      : undefined
+                  }
+                >
+                  {formatBurnedArea(selectedFire.burnedKm2)}
+                  <span>
+                    {selectedFire.burnedKm2 < 5
+                      ? 'nothing here to carry a fire'
+                      : `${formatPct(selectedFire.burnedFraction)} of the country · from ${formatBurnedArea(selectedFire.baselineBurnedKm2)} today`}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {selectedFire && (
+              <div>
+                <dt>Fire season</dt>
+                <dd>
+                  {formatSeasonDays(selectedFire.seasonDays)}
+                  <span>
+                    {selectedFire.seasonDays < 1
+                      ? 'the fuel bed never joins up'
+                      : `from ${formatSeasonDays(selectedFire.baselineSeasonDays)} in the 2020s`}
                   </span>
                 </dd>
               </div>
@@ -299,6 +514,42 @@ export function StatsPanel({
             Rain baseline from World Bank where available; change is a
             latitude-pattern sketch scaled by warming (subtropics often drier,
             high latitudes / deep tropics wetter) — not a full climate model.
+            {selectedDrought &&
+              ` Driest quarter ${dryQuarterLabel(selectedDrought.dryQuarterStartMonth)}, when the land falls ${Math.round(selectedDrought.dryQuarterDeficitMm)} mm short of evaporative demand against ${Math.round(selectedDrought.baselineDryQuarterDeficitMm)} mm today.`}
+            {selectedDrought?.wetterButDrier &&
+              ' More rain arrives here and the water balance still falls, because evaporative demand rises faster.'}
+            {selectedFire && selectedFire.peatBurnedKm2 > 5 &&
+              ` About ${formatBurnedArea(selectedFire.peatBurnedKm2)} of the burned area is peat and permafrost ground, where fire releases carbon banked since the ice left rather than carbon the next season takes back — a pathway whose carbon sinks are failing thaws more of it and burns more of it.`}
+            {selectedHumidHeat &&
+              ` Humid heat peaks in ${monthName(selectedHumidHeat.peakMonth)}${
+                selectedHumidHeat.humidPeakOffHottest
+                  ? `, not in ${monthName(selectedHumidHeat.hottestMonth)} when the thermometer does`
+                  : ''
+              }: about ${Math.round(selectedHumidHeat.peakDryBulbC)}°C at ${Math.round(selectedHumidHeat.peakHumidity * 100)}% humidity, which sweat can only cool to ${formatWetBulbC(selectedHumidHeat.peakWetBulbC)}. ${habitabilityBlurb(selectedHumidHeat.band)}${
+                // Says only what the flag actually tests — more than half the
+                // vapour off the sea, at the country's middle, in that month.
+                // The old wording implied this identified every sea-fed
+                // country, which it does not: it holds for eight, and misses
+                // Oman and Iran because their centroids are too far inland and
+                // Bangladesh because its own ground is wet.
+                selectedHumidHeat.marineFed
+                  ? ' More than half that moisture blows in off the sea rather than rising out of the ground, so the humidity here holds up through a dry summer that the land itself could not supply.'
+                  : ''
+              }${
+                // Only worth saying where the coast is actually a different
+                // climate from the country's middle. For a Bahrain or a
+                // Singapore the centroid *is* the coast, and the sentence
+                // otherwise reads "33.8°C rather than the country-wide 33.8°C".
+                selectedHumidHeat.coastalPopShare > 0.05 &&
+                Math.abs(
+                  selectedHumidHeat.coastalPeakWetBulbC -
+                    selectedHumidHeat.peakWetBulbC,
+                ) >= 0.2
+                  ? ` About ${Math.round(selectedHumidHeat.coastalPopShare * 100)}% of the population lives in the low coastal strip, where the yearly peak is ${formatWetBulbC(selectedHumidHeat.coastalPeakWetBulbC)} rather than the country-wide ${formatWetBulbC(selectedHumidHeat.peakWetBulbC)}.`
+                  : ''
+              }`}
+            {selectedFire && selectedFire.observedBurnedKm2 != null &&
+              ` Satellites measured about ${formatBurnedArea(selectedFire.observedBurnedKm2)} here over 2001–2020. The model is calibrated against that record as a whole rather than country by country, so this is a check on it rather than an input to it, and single years vary by several times either figure.`}
             {selectedLoss &&
               selectedLoss.country.pctBelow5m > 0 &&
               ` ${selectedLoss.country.pctBelow5m.toFixed(1)}% of land is ≤5 m (LECZ).`}
@@ -356,11 +607,47 @@ export function StatsPanel({
               <th>
                 <button
                   type="button"
+                  className={
+                    sortBy === 'drought' ? 'sort-btn active' : 'sort-btn'
+                  }
+                  onClick={() => setSortBy('drought')}
+                  aria-pressed={sortBy === 'drought'}
+                >
+                  Dry{sortBy === 'drought' ? ' ↓' : ''}
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  className={
+                    sortBy === 'humidHeat' ? 'sort-btn active' : 'sort-btn'
+                  }
+                  onClick={() => setSortBy('humidHeat')}
+                  aria-pressed={sortBy === 'humidHeat'}
+                >
+                  Wet bulb{sortBy === 'humidHeat' ? ' ↓' : ''}
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
                   className={sortBy === 'fire' ? 'sort-btn active' : 'sort-btn'}
                   onClick={() => setSortBy('fire')}
                   aria-pressed={sortBy === 'fire'}
                 >
                   Fire{sortBy === 'fire' ? ' ↓' : ''}
+                </button>
+              </th>
+              <th>
+                <button
+                  type="button"
+                  className={
+                    sortBy === 'burnedArea' ? 'sort-btn active' : 'sort-btn'
+                  }
+                  onClick={() => setSortBy('burnedArea')}
+                  aria-pressed={sortBy === 'burnedArea'}
+                >
+                  Burned{sortBy === 'burnedArea' ? ' ↓' : ''}
                 </button>
               </th>
             </tr>
@@ -380,13 +667,32 @@ export function StatsPanel({
                   <td className={row.deltaMm < 0 ? 'rain-dry' : 'rain-wet'}>
                     {formatDeltaFrac(row.deltaFrac)}
                   </td>
+                  <td
+                    className={
+                      row.droughtAnomaly < -0.45 ? 'rain-dry' : 'drought-cell'
+                    }
+                    title={row.aridityClass}
+                  >
+                    {formatAnomaly(row.droughtAnomaly)}
+                  </td>
+                  <td
+                    className={
+                      row.peakWetBulbC >= 31 ? 'rain-dry' : 'wetbulb-cell'
+                    }
+                    title={`${habitabilityLabel(row.habitability)} — ${Math.round(row.daysAbove28)} days a year above 28°C wet bulb, ${Math.round(row.daysAbove31)} above 31°C`}
+                  >
+                    {row.peakWetBulbC.toFixed(1)}
+                  </td>
                   <td className="fire-cell">{row.fireIndex.toFixed(0)}</td>
+                  <td className="fire-cell" title={`${Math.round(row.fireSeasonDays)} flammable days a year`}>
+                    {formatArea(row.fireBurnedKm2)}
+                  </td>
                 </tr>
               )
             })}
             {filtered.length === 0 && (
               <tr className="empty-row">
-                <td colSpan={5}>
+                <td colSpan={8}>
                   No country matches “{query.trim()}”.
                 </td>
               </tr>
@@ -396,8 +702,15 @@ export function StatsPanel({
       </div>
 
       <p className="footnote">
-        Δ°C vs pre-industrial; rain mm/yr is projected annual depth; Δ rain is
-        vs ~2020s baseline. Sort any column. Map colours follow the toggle.
+        Δ°C vs pre-industrial; Δ rain is vs the ~2020s baseline. Dry is the
+        change in rainfall minus evaporative demand, in that country’s own
+        standard deviations, so −1 means a shift of one normal year’s spread
+        toward drought. Wet bulb is the temperature sweat can reach on the
+        worst day of a typical year — 28°C stops safe outdoor work, 31°C is
+        dangerous at rest and 35°C is the survivability limit; hover a cell for
+        its day-counts. Burned is the modelled area burning each year, in km²;
+        hover a cell for that country’s fire-season length. Sort any column. Map
+        colours follow the toggle.
       </p>
     </section>
   )

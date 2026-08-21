@@ -24,7 +24,24 @@ import {
   rainDeltaColor,
   RAIN_LEGEND,
 } from '../lib/rain'
-import { estimateCountryFire, fireColor, FIRE_LEGEND } from '../lib/fire'
+import {
+  estimateCountryFire,
+  fireColor,
+  formatBurnedArea,
+  FIRE_LEGEND,
+} from '../lib/fire'
+import {
+  droughtColor,
+  DROUGHT_LEGEND,
+  estimateCountryDrought,
+  formatAnomaly,
+  type AridityClass,
+} from '../lib/drought'
+import {
+  estimateCountryHumidHeat,
+  humidHeatColor,
+  HUMID_HEAT_LEGEND,
+} from '../lib/humidHeat'
 import { useIsMobile } from '../lib/useIsMobile'
 import { localSeaLevel } from '../lib/regionalSeaLevel'
 import { dropSubPixelParts } from '../lib/globeGeometry'
@@ -37,7 +54,13 @@ import {
   type RiverState,
 } from '../data/rivers'
 
-export type MapMode = 'temp' | 'loss' | 'rain' | 'fire'
+export type MapMode =
+  | 'temp'
+  | 'loss'
+  | 'rain'
+  | 'fire'
+  | 'drought'
+  | 'humidheat'
 
 /**
  * The globe's own colours, per theme: the sky behind it, the glow around it,
@@ -518,6 +541,14 @@ export function EarthGlobe({
         deltaMm: number
         deltaFrac: number
         fireIndex: number
+        fireBurnedKm2: number
+        fireSeasonDays: number
+        droughtAnomaly: number
+        aridityClass: AridityClass
+        frozenGround: boolean
+        peakWetBulbC: number
+        wetBulbDaysAbove28: number
+        wetBulbDaysAbove31: number
       }
     >()
     for (const f of features) {
@@ -532,6 +563,8 @@ export function EarthGlobe({
       const areaKm2 = f.__areaKm2 ?? 0
       const rain = estimateCountryRain(f, warmingC, sea.physics)
       const fire = estimateCountryFire(f, warmingC, sea.physics)
+      const water = estimateCountryDrought(f, warmingC, sea.physics)
+      const humid = estimateCountryHumidHeat(f, warmingC, sea.physics)
       m.set(f.properties.id, {
         frac,
         absoluteC: estimateCountryTemp(f, warmingC, sea.physics).absoluteC,
@@ -540,6 +573,14 @@ export function EarthGlobe({
         deltaMm: rain.deltaMm,
         deltaFrac: rain.deltaFrac,
         fireIndex: fire.index,
+        fireBurnedKm2: fire.burnedKm2,
+        fireSeasonDays: fire.seasonDays,
+        droughtAnomaly: water.anomaly,
+        aridityClass: water.aridityClass,
+        frozenGround: water.frozenGround,
+        peakWetBulbC: humid.peakWetBulbC,
+        wetBulbDaysAbove28: humid.daysAbove28,
+        wetBulbDaysAbove31: humid.daysAbove31,
       })
     }
     return m
@@ -628,6 +669,47 @@ export function EarthGlobe({
             Math.abs(deltaFrac) * 20 + (deltaFrac < 0 ? 1 : 0),
           ),
         })
+      } else if (mapMode === 'drought') {
+        const anomaly = metrics?.droughtAnomaly ?? 0
+        const label = formatAnomaly(anomaly)
+        labels.push({
+          id: f.properties.id,
+          name: f.properties.name,
+          lat: meta.lat,
+          lng: meta.lng,
+          // On the ice sheets the aridity class is an artefact of running a
+          // soil column over ice, so it is named rather than reported.
+          text: detailed
+            ? `${label} · ${metrics?.frozenGround ? 'polar ground' : (metrics?.aridityClass ?? 'humid')}`
+            : label,
+          areaKm2: meta.areaKm2,
+          // The ramp darkens at both ends, so light text is needed for a strong
+          // move in either direction and dark text only near the neutral
+          // middle. The crossover sits near 0.8σ, which is where the rust and
+          // the blue ends both get too dark to read against — and, unlike the
+          // old 1.3σ, is a value countries on the default pathway reach.
+          light: isLightText(Math.abs(anomaly) * 3.6),
+        })
+      } else if (mapMode === 'humidheat') {
+        const wet = metrics?.peakWetBulbC ?? 0
+        labels.push({
+          id: f.properties.id,
+          name: f.properties.name,
+          lat: meta.lat,
+          lng: meta.lng,
+          // The wet bulb is what the ramp shows, so it stays the label. The
+          // day-counts are the part a reader can act on and are far too long a
+          // string to print on every country at once, so they wait for a hover.
+          text: detailed
+            ? `${wet.toFixed(1)}° · ${Math.round(metrics?.wetBulbDaysAbove28 ?? 0)}d>28 · ${Math.round(metrics?.wetBulbDaysAbove31 ?? 0)}d>31`
+            : `${wet.toFixed(coarse ? 0 : 1)}°`,
+          areaKm2: meta.areaKm2,
+          // The ramp goes dark past 31°C, where the reds and violets start, and
+          // stays pale below it. `isLightText` takes a 0-ish to 14-ish scale, so
+          // the wet bulb is re-centred on 24°C rather than on zero — otherwise
+          // every country on Earth reads as needing light text.
+          light: isLightText((wet - 24) * 1.6),
+        })
       } else if (mapMode === 'fire') {
         const fire = metrics?.fireIndex ?? 0
         labels.push({
@@ -635,7 +717,12 @@ export function EarthGlobe({
           name: f.properties.name,
           lat: meta.lat,
           lng: meta.lng,
-          text: fire.toFixed(0),
+          // The index is what the colour ramp shows, so it stays the label. The
+          // quantity a reader can actually check is the burned area, and it is
+          // too long a string to print on every country at once.
+          text: detailed
+            ? `${fire.toFixed(0)} · ${formatBurnedArea(metrics?.fireBurnedKm2 ?? 0)} · ${Math.round(metrics?.fireSeasonDays ?? 0)}d`
+            : fire.toFixed(0),
           areaKm2: meta.areaKm2,
           // The fire ramp darkens fast, so light text is needed sooner.
           light: isLightText(fire / 14),
@@ -800,6 +887,12 @@ export function EarthGlobe({
             if (mapMode === 'fire') {
               return fireColor(metrics?.fireIndex ?? 0, hovered)
             }
+            if (mapMode === 'drought') {
+              return droughtColor(metrics?.droughtAnomaly ?? 0, hovered)
+            }
+            if (mapMode === 'humidheat') {
+              return humidHeatColor(metrics?.peakWetBulbC ?? 0, hovered)
+            }
             return lossColor(metrics?.frac ?? 0, hovered)
           }}
           polygonSideColor={NO_SIDE}
@@ -889,6 +982,45 @@ export function EarthGlobe({
               blue = more flow, rust = less.
             </span>
           </>
+        ) : mapMode === 'drought' ? (
+          <>
+            <span className="temp-legend-title">
+              Water balance vs ~2020s
+            </span>
+            <div className="temp-legend-scale">
+              {DROUGHT_LEGEND.map((s) => (
+                <span key={s.label} className="temp-legend-stop">
+                  <i style={{ background: s.color }} />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <span className="temp-legend-note">
+              Labels = change in rainfall minus evaporative demand, in that
+              country’s own standard deviations. Hover for its aridity class.
+            </span>
+          </>
+        ) : mapMode === 'humidheat' ? (
+          <>
+            <span className="temp-legend-title">
+              Humid heat: yearly peak wet bulb
+            </span>
+            <div className="temp-legend-scale">
+              {HUMID_HEAT_LEGEND.map((s) => (
+                <span key={s.label} className="temp-legend-stop">
+                  <i style={{ background: s.color }} />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <span className="temp-legend-note">
+              Labels = the wet-bulb temperature reached on about one day a year;
+              hover a country for the days above 28°C and 31°C. Wet bulb is what
+              sweat can reach, so dry heat scores low however hot it is: the
+              Sahara sits near 26°C and the Persian Gulf near 33°C. Past 35°C a
+              resting human cannot shed heat at all.
+            </span>
+          </>
         ) : mapMode === 'fire' ? (
           <>
             <span className="temp-legend-title">Fire weather</span>
@@ -901,8 +1033,10 @@ export function EarthGlobe({
               ))}
             </div>
             <span className="temp-legend-note">
-              Labels = fire-weather index 0–100. Needs fuel, dryness and heat
-              together, so deserts and frozen ground stay low.
+              Labels = fire-weather index 0–100; hover a country for the area it
+              burns each year and how many days of the year it can. Fire needs
+              fuel, dryness and heat together, so deserts and frozen ground stay
+              low. Burned area is calibrated against the MODIS satellite record.
             </span>
           </>
         ) : (

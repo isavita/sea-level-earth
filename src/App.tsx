@@ -244,9 +244,13 @@ function AppShell() {
                 ? 'temperature'
                 : mapMode === 'rain'
                   ? 'rain'
-                  : mapMode === 'fire'
-                    ? 'fire weather'
-                    : 'land loss'}
+                  : mapMode === 'drought'
+                    ? 'water balance'
+                    : mapMode === 'fire'
+                      ? 'fire weather'
+                      : mapMode === 'humidheat'
+                        ? 'humid heat'
+                        : 'land loss'}
             </span>
           </div>
         </div>

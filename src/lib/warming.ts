@@ -128,6 +128,21 @@ function geoShape(feature: CountryFeature): GeoShape {
   return shape
 }
 
+/**
+ * The country's centroid, off the same cache the warming model uses.
+ *
+ * Exported because every other model layer needs it too, and `geoCentroid` over
+ * a 50m polygon is expensive enough that calling it fresh per layer per
+ * timeline commit was measurable — the rainfall model alone did it three times
+ * per call.
+ */
+export function countryCentroid(feature: CountryFeature): {
+  lat: number
+  lng: number
+} {
+  return geoShape(feature)
+}
+
 /** 0 = fully maritime, 1 = deep continental interior. */
 export function continentality(feature: CountryFeature): number {
   const { halfWidthKm } = geoShape(feature)
