@@ -151,9 +151,21 @@ const OBSERVED_BURNED_AREA_KM2: Record<string, number> = {
   ITA: 700, // Italy
   FRA: 400, // France
   TUR: 300, // Turkey
-  JPN: 90, // Japan
+  // Japan is not a MODIS figure either. Its national fire statistics put the
+  // recent annual burned area at 400-800 ha — roughly 7 km2 — and the 1995-2020
+  // mean at 1,820 ha, on a strong downward trend. The 90 km2 previously here
+  // was an order of magnitude high for one of the least fire-prone temperate
+  // countries there is.
+  JPN: 10, // Japan — national forest fire statistics, recent mean
   DEU: 30, // Germany
-  GBR: 90, // United Kingdom
+  // Europe's small-fire landscapes are taken from GWIS/EFFIS rather than MODIS.
+  // MODIS at 500 m misses fires below roughly 100 ha, and essentially the whole
+  // British and Irish regime is below that: moor and gorse fires of tens of
+  // hectares, thousands of them. The MODIS mean of 90 km2 understates the GWIS
+  // record by well over a factor of two — GWIS put 2025 at 47,879 ha (479 km2),
+  // the worst on record, 2019 at roughly 289 km2, and 2026 at 234 km2 by the
+  // tenth of August with the season still running.
+  GBR: 150, // United Kingdom — GWIS/EFFIS recent-decade mean
   IRL: 60, // Ireland
   NZL: 60, // New Zealand
   BGD: 30, // Bangladesh
@@ -732,10 +744,43 @@ function fireDayVpdKPa(
   seasonHumidity: number,
   diurnalRangeC: number,
   amplitudeC: number,
+  latitude: number,
 ): number {
   const ea = seasonHumidity * saturationVapourPressureKPa(seasonTempC)
-  const fireDayC = seasonTempC + 0.5 * diurnalRangeC + 0.16 * amplitudeC
+  const fireDayC =
+    seasonTempC +
+    0.5 * diurnalRangeC +
+    Math.max(0.16 * amplitudeC, baroclinicExcursionC(latitude))
   return Math.max(0, saturationVapourPressureKPa(fireDayC) - ea)
+}
+
+/**
+ * How far a fire day sits above the month, from synoptic weather rather than
+ * from the seasonal cycle, °C.
+ *
+ * The excursion above was scaled on the seasonal amplitude, on the argument
+ * that both measure distance from an ocean's thermal buffer. That reasoning is
+ * wrong for exactly the climates it was hurting. Day-to-day variability in the
+ * mid-latitudes is set by baroclinicity — the storm track — and the storm track
+ * is strongest over the maritime north-east Atlantic, not weakest. A
+ * continental interior has a large seasonal cycle and comparatively repetitive
+ * summer weather; Britain has a small seasonal cycle and violently changeable
+ * weather, and its fire days are the anticyclonic ones that sit eight or ten
+ * degrees above the March mean.
+ *
+ * Tying the excursion to seasonal amplitude alone gave those countries almost
+ * no fire day at all. Taking whichever of the two mechanisms is larger keeps
+ * the continental interiors where they were and stops flattening the maritime
+ * mid-latitudes. Peaks in the storm-track latitudes and falls away toward the
+ * equator, where the tropics genuinely do run day after identical day.
+ */
+const BAROCLINIC_PEAK_C = 5.5
+const BAROCLINIC_PEAK_LAT = 52
+const BAROCLINIC_WIDTH_LAT = 26
+
+function baroclinicExcursionC(latitude: number): number {
+  const d = (Math.abs(latitude) - BAROCLINIC_PEAK_LAT) / BAROCLINIC_WIDTH_LAT
+  return BAROCLINIC_PEAK_C * Math.exp(-(d * d))
 }
 
 /**
@@ -867,10 +912,62 @@ const WET_MONTH_MM = 25
 const CANOPY_DRY_MONTHS = 4
 const CANOPY_DRY_SPAN = 4
 
+/**
+ * The other way a canopy fails to close: too wet and too cool, not too dry.
+ *
+ * Drought is not the only thing that keeps trees off the ground. In a cool
+ * oceanic climate the rain exceeds what the short growing season can evaporate,
+ * the ground waterlogs, peat accumulates and the canopy never closes — blanket
+ * bog, moor and heath. That is the Pennines, the Highlands, the Irish midlands,
+ * western Norway, the Faroes. Reading only the drought route left the United
+ * Kingdom classified as one hundred percent woody, which zeroed its herbaceous
+ * fuel, which in turn zeroed the dormant-season path below: the model reported
+ * a fire season of one day a year and 0.2 km² burned against an observed 90,
+ * and warming it by 8 °C moved that to three days.
+ *
+ * That is exactly backwards for where British fire actually is. It is moorland
+ * fire, in dead Calluna and Molinia, and the ground under it is often
+ * saturated — the fuel is dry because it is dead and the air is dry, not
+ * because the soil is.
+ *
+ * Two conditions, and both have to hold, which is what keeps this from firing
+ * anywhere it should not: the growing season has to be cool enough to hold
+ * production down, and there has to be far more water arriving than the year
+ * can evaporate. Warm wet climates keep their canopy and are untouched — the
+ * Congo and Amazonia sit at an aridity well past this threshold with mean
+ * temperatures three times the ceiling.
+ */
+const OCEANIC_COOL_C = 12
+const OCEANIC_COLD_C = 2
+/** Aridity index above which arriving water outruns what the year can use. */
+const WATERLOGGED_ARIDITY = 1.25
+const WATERLOGGED_SPAN = 0.75
+
+/**
+ * Share of the herbaceous ground that is bog, moor and heath rather than
+ * farmland, 0-1. Same two conditions as the canopy term it feeds: cool enough
+ * to hold production down, wet enough to waterlog.
+ *
+ * Split out because it answers a second question as well as a vegetation one.
+ * Unenclosed moor is not a worked landscape: it has no ploughed firebreaks, no
+ * field boundaries to stop a front, and a fire on it can burn for days before
+ * anyone reaches it, as Saddleworth did for three weeks in 2018.
+ */
+function bogShare(aridityIndex: number, meanTempC: number): number {
+  const cool = clamp01(
+    (OCEANIC_COOL_C - meanTempC) / (OCEANIC_COOL_C - OCEANIC_COLD_C),
+  )
+  const waterlogged = clamp01(
+    (aridityIndex - WATERLOGGED_ARIDITY) / WATERLOGGED_SPAN,
+  )
+  return cool * waterlogged
+}
+
 function grassShare(
   aridityIndex: number,
   dryQuarterEvaporativeFraction: number,
   dryMonths: number,
+  meanTempC: number,
 ): number {
   const waterForCanopy = clamp01((aridityIndex - 0.55) / 0.75)
   // How far the driest quarter is from meeting demand: 0 where the land never
@@ -878,7 +975,10 @@ function grassShare(
   const seasonalityOpensIt =
     clamp01((0.75 - dryQuarterEvaporativeFraction) / 0.5) *
     clamp01((dryMonths - CANOPY_DRY_MONTHS) / CANOPY_DRY_SPAN)
-  return clamp01(1 - waterForCanopy * (1 - seasonalityOpensIt))
+  const bogOpensIt = bogShare(aridityIndex, meanTempC)
+  return clamp01(
+    1 - waterForCanopy * (1 - seasonalityOpensIt) * (1 - bogOpensIt),
+  )
 }
 
 /**
@@ -964,6 +1064,8 @@ function humanModulation(
   densityPerKm2: number,
   /** 0 where the year has a frost, 1 where it never does. */
   tropical: number,
+  /** Share of the herbaceous ground that is unenclosed moor rather than farm. */
+  bog: number,
 ): number {
   const ignition = 0.4 + 0.6 * grass
   const capacity = clamp01(1 - seasonDays / 200)
@@ -971,7 +1073,14 @@ function humanModulation(
   const fragmentation = 0.25 + 0.75 / (1 + (Math.max(0, densityPerKm2) / 120) ** 1.5)
   // Where almost nobody lives, ignitions rather than fuel are the limit.
   const ignitionSupply = 0.55 + 0.45 * clamp01(densityPerKm2 / 4)
-  const worked = (1 - tropical) * clamp01(densityPerKm2 / SETTLED_DENSITY)
+  // Density stands in for a worked, fragmented countryside — but only where the
+  // ground is actually worked. Unenclosed moor carries none of that: no plough
+  // lines, no field edges, and an upland fire can run for days before a crew
+  // reaches it. Applying the farmland suppression to Britain regardless cut its
+  // burned area by sixteen times and was the single largest reason the model
+  // put the United Kingdom two orders of magnitude below the satellite record.
+  const worked =
+    (1 - tropical) * clamp01(densityPerKm2 / SETTLED_DENSITY) * (1 - bog)
   return (
     ignition *
     (1 - suppression) *
@@ -988,8 +1097,16 @@ function humanModulation(
  * Africa's share of it on the observed 60–70%. Everything else in the chain is
  * either physics or a shape taken from the ecology literature; this converts
  * the product of those into an area.
+ *
+ * Refitted after an audit against the calibration table showed the model was
+ * uniformly low rather than wrong in shape: the median country came out at 0.51
+ * of its observed burned area, the fifteen largest at 0.51 and the twenty
+ * smallest at 0.48. A bias that flat across three orders of magnitude of
+ * country size is this constant being wrong, not the physics above it — so the
+ * fix is here and only here. The old value put the global total at 2.6 million
+ * km²/yr against a GFED range starting at 3.5.
  */
-const BURNED_AREA_SCALE = 1.15
+const BURNED_AREA_SCALE = 1.78
 
 /**
  * Annual burned fraction a fully cured grassland can reach, on either side of
@@ -1049,6 +1166,81 @@ const FUEL_RETENTION = 0.87
 const GREEN_UP_FLOOR_MM = 35
 const GREEN_UP_SPAN_MM = 45
 
+/**
+ * Dormant-season fire: fuel cured by winter, not by drought.
+ *
+ * The curing gate above asks whether the land can still meet the atmosphere's
+ * demand. That is the right question for a drought-driven fire regime and the
+ * wrong one for a maritime temperate country, where the answer is "yes, always"
+ * and the model therefore found the United Kingdom one flammable day a year and
+ * 0.2 km² burned against an observed 90. Warming it by 8 °C moved that to three
+ * days, because no amount of heat makes a British summer water-limited.
+ *
+ * But British fire is not a summer drought phenomenon. It is a late-winter and
+ * early-spring one, in Calluna, Molinia and bracken litter that is dead because
+ * the plant senesced in October — and dead fine fuel does not care what the
+ * soil is doing. A 1-hour fuel equilibrates with the humidity of the air within
+ * hours, so a bed standing over saturated peat can sit below its moisture of
+ * extinction on the first dry, breezy day of March. The same regime carries the
+ * spring grass fires of the steppe and the boreal, which the file's own fuel
+ * comment already notices ("last year's grass standing dead under this year's")
+ * without ever giving them a path to burn.
+ *
+ * Three conditions, all of which the monthly trace can answer:
+ *   1. the sward senesced — driven by cold, not by dryness
+ *   2. it has not greened up yet, since live leaf will not carry fire
+ *   3. the day is dry enough for a dead bed, which is a far lower bar than for
+ *      a living landscape that first has to be killed by drought
+ *
+ * This adds nothing in the tropics, where nothing senesces from cold, so the
+ * savanna belt that dominates global burned area is untouched by it.
+ */
+const SENESCENCE_WARM_C = 10
+const SENESCENCE_COLD_C = 2
+/**
+ * VPD floor for a bed that is already dead, kPa.
+ *
+ * Well below the drought threshold because the fuel needs no killing — only
+ * drying. A March afternoon at 12 °C and 45% humidity is about 0.8 kPa, and
+ * that is a moorland fire day in the real record.
+ */
+/**
+ * Senescence forced by short days rather than by cold, 0-1.
+ *
+ * Daylength is the one driver of the fire year that a warming climate cannot
+ * touch, which is exactly why it belongs here: without it the dormant season
+ * shrinks as the winters mild, and the model answers a hotter world with less
+ * fire. Zero in the tropics, where the day barely moves and nothing senesces on
+ * it; strengthening polewards, where the winter photoperiod collapses.
+ *
+ * The declination term is the standard first-order solar geometry, so the
+ * hemispheres get their own winters without a special case.
+ */
+function photoperiodSenescence(latitude: number, month: number): number {
+  const declination =
+    23.44 * Math.sin((2 * Math.PI * (month - 2.5)) / 12) * (Math.PI / 180)
+  const latRad = (latitude * Math.PI) / 180
+  const cosH = -Math.tan(latRad) * Math.tan(declination)
+  // Daylight hours, with the poles clamped to their polar day and night.
+  const dayHours =
+    cosH <= -1 ? 24 : cosH >= 1 ? 0 : (24 / Math.PI) * Math.acos(cosH)
+  // Growth stalls under about ten hours; a full sixteen is high summer.
+  return clamp01((10.5 - dayHours) / 3)
+}
+
+/**
+ * Share of the standing dead bed that green-up removes in a month.
+ *
+ * Deliberately slow. Dead Calluna and Molinia litter has a residence time of
+ * years, not weeks — that standing crop is why a moor carries fire at all — and
+ * a fast turnover made the spring window close before the drying weather
+ * arrived, so a warmer Britain came out less flammable than a cold one.
+ */
+const LITTER_TURNOVER = 0.3
+
+const DEAD_FUEL_DRYING_FLOOR = 0.35
+const DEAD_FUEL_DRYING_SPAN = 1.1
+
 /** Standing fuel below which the bed is too patchy to carry fire, mm of AET. */
 const FUEL_FLOOR_MM = 55
 /** Standing fuel at which the bed is continuous enough to carry a front. */
@@ -1092,6 +1284,8 @@ const TRACE: MonthlyTrace = {
 }
 
 const STANDING_FUEL_MM = new Float64Array(12)
+/** Scratch, same lifetime and reuse rules as STANDING_FUEL_MM above. */
+const DEAD_FUEL_FRAC = new Float64Array(12)
 
 const BAND_RESULT: BandFire = {
   burnedFraction: 0,
@@ -1140,10 +1334,17 @@ function bandFire(
     const rainMm = annualPrecipMm * band.geo.rainShare[m]
     dryMonths += clamp01((DRY_MONTH_MM - rainMm) / (DRY_MONTH_MM - WET_MONTH_MM))
   }
+  // Today's temperature, not the pathway's. Blanket bog and moor are a legacy
+  // in exactly the sense the peat term below is: the ground took millennia to
+  // waterlog and does not grow a closed canopy because the century warmed.
+  // Reading the projected temperature here made warming delete Norway's
+  // moorland and with it its fuel, so its burned area fell by two thirds
+  // between +1.15 and +8 degrees.
   const grass = grassShare(
     aridity,
     balance.dryQuarterEvaporativeFraction,
     dryMonths,
+    band.baseTempC,
   )
   const warmth = warmthLimitedGrowth(meanTempC)
 
@@ -1176,6 +1377,40 @@ function bandFire(
     }
   }
 
+  // How much of the standing bed is dead from last winter, month by month.
+  //
+  // Senescence is set by cold and persists until the sward greens up again, so
+  // it has to be carried forward across months rather than read off one of
+  // them — the fuel that burns in March died in October. Two passes for the
+  // same reason the fuel bed needs two: March has to inherit from the previous
+  // December rather than start the year at zero.
+  let dead = 0
+  for (let pass = 0; pass < 2; pass++) {
+    for (let m = 0; m < 12; m++) {
+      // Cold kills the sward outright; a mild month only part-cures it. But
+      // temperate herbaceous senescence is not only a temperature response —
+      // Molinia, bracken and the rough grasses die back on shortening days, and
+      // daylength does not care how warm the century is. Keying it on cold
+      // alone made a warmer Britain a less flammable one, because mild winters
+      // stopped curing the fuel faster than the drier air could dry it, and the
+      // model reported fire falling as the planet heated. Photoperiod sets a
+      // floor that warming cannot lift.
+      const cold = clamp01(
+        (SENESCENCE_WARM_C - TRACE.tempC[m]) /
+          (SENESCENCE_WARM_C - SENESCENCE_COLD_C),
+      )
+      const kill = Math.max(cold, photoperiodSenescence(band.geo.lat, m))
+      // Green-up consumes the dead bed: new leaf both shades it and replaces it
+      // as the surface fuel. This is what ends the season in April rather than
+      // letting it run into a wet British summer.
+      const greening = clamp01(
+        (TRACE.aetMm[m] - GREEN_UP_FLOOR_MM) / GREEN_UP_SPAN_MM,
+      )
+      dead = Math.max(kill, dead * (1 - LITTER_TURNOVER * greening))
+      if (pass === 1) DEAD_FUEL_FRAC[m] = dead
+    }
+  }
+
   // Count the season month by month. Weighted rather than a hard threshold on
   // each month, because a threshold makes the answer jump by thirty days when a
   // country warms by a tenth of a degree, and the real transition is gradual:
@@ -1192,6 +1427,7 @@ function bandFire(
       surfaceHumidity(ef),
       dtr,
       band.amplitudeC,
+      band.geo.lat,
     )
     if (vpd > peakVpd) peakVpd = vpd
     // Grass has to senesce before it will burn, and a green sward will not
@@ -1222,6 +1458,15 @@ function bandFire(
     const curedForest = clamp01((1.02 - ef) / 0.8)
     const cured = grass * curedGrass + (1 - grass) * curedForest
     const drying = clamp01((vpd - 0.9) / 1.9)
+    // The second path to a fire day: a bed that winter already killed. It needs
+    // no drought to cure it, so it is gated on dryness alone and at a much
+    // lower bar — and only on the herbaceous share, because a dead grass sward
+    // is the surface fuel in a way that a deciduous canopy's dropped leaves,
+    // packed flat and wet under snowmelt, are not.
+    const dryingDead = clamp01(
+      (vpd - DEAD_FUEL_DRYING_FLOOR) / DEAD_FUEL_DRYING_SPAN,
+    )
+    const dormant = grass * DEAD_FUEL_FRAC[m] * dryingDead
     // Lying snow ends the argument.
     const snowFree = clamp01(1 - TRACE.snowPackMm[m] / 12)
     // Fire spreads through a fuel bed or it stops. Below the floor the grass
@@ -1233,7 +1478,11 @@ function bandFire(
       (STANDING_FUEL_MM[m] - FUEL_FLOOR_MM) / (FUEL_CONNECTED_MM - FUEL_FLOOR_MM),
     )
     const carries = grass * grassCarries + (1 - grass)
-    const days = MONTH_DAYS[m] * cured * drying * snowFree * carries
+    // Whichever mechanism is stronger sets the day. They are alternatives, not
+    // addends — a bed cannot be cured twice, and summing them would double-count
+    // the steppe, where both paths are live in the same spring month.
+    const flammable = Math.max(cured * drying, dormant)
+    const days = MONTH_DAYS[m] * flammable * snowFree * carries
     seasonDays += days
     fuelWhenBurning += days * STANDING_FUEL_MM[m]
   }
@@ -1262,7 +1511,13 @@ function bandFire(
     organicShare *
       (0.3 * clamp01(warmingSince2020C / 4) + 0.9 * clamp01(carbonFeedback))
 
-  const human = humanModulation(grass, seasonDays, densityPerKm2, tropical)
+  const human = humanModulation(
+    grass,
+    seasonDays,
+    densityPerKm2,
+    tropical,
+    bogShare(aridity, band.baseTempC),
+  )
   BAND_RESULT.burnedFraction = Math.min(
     0.9,
     BURNED_AREA_SCALE *
@@ -1333,6 +1588,8 @@ function bandFor(index: number): FireRisk['band'] {
 
 interface FireInputs {
   meanTempC: number
+  /** Country centroid latitude — sets the synoptic excursion on a fire day. */
+  lat: number
   amplitudeC: number
   continental: number
   annualPrecipMm: number
@@ -1356,6 +1613,7 @@ function indexAt(
     input.drySeasonHumidity,
     dailyTempRangeC(input.annualPrecipMm, input.continental),
     amplitudeC,
+    input.lat,
   )
   const fuel = input.frozenGround ? 0 : fuelAvailability(input.aridityIndex)
   const seasonFrac = fireSeasonFraction(meanTempC, amplitudeC)
@@ -1458,6 +1716,7 @@ export function estimateCountryFire(
 
   const now = indexAt({
     meanTempC: baseTempC,
+    lat,
     amplitudeC,
     continental,
     annualPrecipMm: rain.baselineMm,
@@ -1470,6 +1729,7 @@ export function estimateCountryFire(
   })
   const future = indexAt({
     meanTempC: futureTempC,
+    lat,
     amplitudeC,
     continental,
     annualPrecipMm: rain.futureMm,
