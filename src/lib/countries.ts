@@ -9,6 +9,21 @@ import { optimiseForGlobe } from './globeGeometry'
 export type CountryFeature = Feature<Geometry, { name: string; id: string }> & {
   __risk?: CountryRisk
   __areaKm2?: number
+  /**
+   * The country's *coastline* — interleaved lng, lat — as opposed to its
+   * outline, which is mostly land border.
+   *
+   * Derived from arc sharing in the topology: a boundary arc that belongs to
+   * exactly one country has no country on its other side, so it faces water.
+   * That test is free here and impossible downstream, because the decoded
+   * GeoJSON has thrown the sharing away, and every layer that has wanted to ask
+   * "which sea is beside this country" has had to guess from the outline
+   * instead. Guessing gets it wrong in both directions: Algeria's Saharan
+   * frontier at 19°N reads as tropical water 1,500 km from any, and Argentina's
+   * Andean border falls inside the Humboldt upwelling box while its actual
+   * coast is the warm South Atlantic.
+   */
+  __coast?: Float32Array
 }
 
 type CountriesTopology = {
@@ -30,6 +45,22 @@ type CountriesTopology = {
 const EARTH_KM2 = 510_072_000
 // geoArea returns steradians; Earth surface ≈ 4π sr → km² factor:
 const SR_TO_KM2 = EARTH_KM2 / (4 * Math.PI)
+
+/**
+ * Keep every Nth coastline vertex.
+ *
+ * The 50m coastline is far denser than anything reading it needs — the coarsest
+ * consumer asks which of a dozen multi-degree sea boxes a point falls in — and
+ * storing all of it for 241 countries costs about 1 MB to answer a question
+ * that a point every few kilometres answers identically.
+ */
+const COAST_STRIDE = 4
+
+/** Every arc index a topology geometry references, with `~i` unwound. */
+function eachArcIndex(arcs: unknown, fn: (index: number) => void): void {
+  if (typeof arcs === 'number') fn(arcs < 0 ? ~arcs : arcs)
+  else if (Array.isArray(arcs)) for (const a of arcs) eachArcIndex(a, fn)
+}
 
 export interface LoadedCountries {
   features: CountryFeature[]
@@ -81,7 +112,38 @@ async function fetchCountries(): Promise<LoadedCountries> {
     topo.objects.countries as never,
   ) as unknown as FeatureCollection<Geometry, { name: string }>
 
-  const features: CountryFeature[] = fc.features.map((f) => {
+  // How many countries each boundary arc belongs to. One means the far side is
+  // not another country, which on this dataset means water.
+  const arcUse = new Map<number, number>()
+  for (const g of topo.objects.countries.geometries) {
+    eachArcIndex(g.arcs, (i) => arcUse.set(i, (arcUse.get(i) ?? 0) + 1))
+  }
+  const coastByIndex = topo.objects.countries.geometries.map((g) => {
+    const solo: number[][] = []
+    eachArcIndex(g.arcs, (i) => {
+      if (arcUse.get(i) === 1) solo.push([i])
+    })
+    if (solo.length === 0) return undefined
+    // Decoded through topojson rather than by hand: the arcs are delta-encoded
+    // against the topology's own quantisation, and reimplementing that here
+    // would be a second, silently divergent copy of it.
+    const lines = feature(topo as never, {
+      type: 'MultiLineString',
+      arcs: solo,
+    } as never) as unknown as Feature<{
+      type: 'MultiLineString'
+      coordinates: number[][][]
+    }>
+    const out: number[] = []
+    for (const line of lines.geometry.coordinates) {
+      for (let i = 0; i < line.length; i += COAST_STRIDE) {
+        out.push(line[i][0], line[i][1])
+      }
+    }
+    return out.length > 0 ? new Float32Array(out) : undefined
+  })
+
+  const features: CountryFeature[] = fc.features.map((f, index) => {
     const id = String((f as { id?: string | number }).id ?? '')
     const name = f.properties?.name ?? 'Unknown'
     const risk = lookupRisk(id, name)
@@ -98,6 +160,7 @@ async function fetchCountries(): Promise<LoadedCountries> {
       },
       __risk: risk,
       __areaKm2: risk?.areaKm2 ?? areaFromGeo,
+      __coast: coastByIndex[index],
     }
     return named
   })

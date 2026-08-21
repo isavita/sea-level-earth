@@ -16,6 +16,7 @@ import {
   annualMeanTempC,
   climateGeoAt,
   dailyTempRangeC,
+  seasonalAmplitudeC,
   monthlyBalance,
   MONTH_DAYS,
   surfaceHumidity,
@@ -281,6 +282,22 @@ interface SeaPatch {
   anomalyC: number
   /** Enclosed basins swing much further between winter and summer. */
   enclosed: boolean
+  /**
+   * Relative humidity of the marine boundary layer over this basin, where it
+   * departs from the `MARINE_RH` default.
+   *
+   * Basin-specific because it observably is. The default of 0.8 is read off the
+   * Persian Gulf, which is a narrow bathtub whose air sits in near-equilibrium
+   * with the water under it. The summer Mediterranean is not that: it is wide,
+   * it lies under the descending branch of the Hadley cell and the eastern flank
+   * of the Azores high, and the air arriving at its southern shore has often
+   * been over the Sahara. Algiers averages 59% relative humidity at the height
+   * of summer against a 26 °C sea. Left at 0.8 the model gave the Maghreb coast
+   * a dew point several degrees above anything it records, and put Libya at a
+   * 30.5 °C wet bulb today — above the 28 °C that regional wet bulbs in European
+   * and Mediterranean heatwaves have never been observed to exceed.
+   */
+  marineRh?: number
 }
 
 const SEA_PATCHES: SeaPatch[] = [
@@ -296,7 +313,7 @@ const SEA_PATCHES: SeaPatch[] = [
   // reason it is hot — it evaporates continuously.
   { lat0: 12, lat1: 30, lng0: 32, lng1: 44, anomalyC: 4, enclosed: true },
   // Mediterranean and Black Sea.
-  { lat0: 30, lat1: 47, lng0: -6, lng1: 42, anomalyC: 3, enclosed: true },
+  { lat0: 30, lat1: 47, lng0: -6, lng1: 42, anomalyC: 3, enclosed: true, marineRh: 0.7 },
   // Bay of Bengal and the Andaman Sea — the monsoon's own moisture reservoir.
   { lat0: 4, lat1: 25, lng0: 78, lng1: 100, anomalyC: 1.5, enclosed: false },
   // Kuroshio and the East China Sea: a western boundary current dragging
@@ -577,6 +594,8 @@ interface MoistureGeo {
   lat: number
   lng: number
   continental: number
+  /** Whether the country reaches the sea anywhere at all. */
+  hasCoast: boolean
   /** 0 where the local sea never reaches the country's middle, 1 at the shore. */
   coastReach: number
   /** How much maritime air the monsoon imports, at the height of the wet season. */
@@ -585,6 +604,112 @@ interface MoistureGeo {
   seaAnomalyC: number
   /** Peak-to-trough swing of that sea through the year, °C. */
   seaSwingC: number
+  /**
+   * The same three numbers for the *coast* rather than for the centroid: the
+   * latitude of the warmest sea the country's outline actually touches, that
+   * sea's anomaly, and its swing.
+   *
+   * Separate from the centroid's because for a large country they are not the
+   * same sea and often not the same latitude. The United States' centroid is in
+   * Kansas at 39.5°N, where the open ocean runs 22 °C; its humid-heat coast is
+   * the Gulf of Mexico at 29°N, which runs 28.4 °C, and that is a difference of
+   * 6 °C of dew point — the whole gap between a Kansas July and a Louisiana one.
+   */
+  coastLat: number
+  coastAnomalyC: number
+  coastSwingC: number
+  /** Marine boundary-layer humidity of each zone's own sea. */
+  seaMarineRh: number
+  coastMarineRh: number
+  /**
+   * Whether a named sea was actually found beside the coast.
+   *
+   * False is not "landlocked" — it is "this country's coast is on open ocean
+   * that `SEA_PATCHES` does not describe", which covers the South Atlantic, the
+   * Indian Ocean off southern Africa and the Timor Sea. There the coastal run
+   * has no warm sea to offer and its only effect would be to strip the
+   * interior's continentality out of the temperature cycle, which cools without
+   * moistening: Buenos Aires came out 6 °C below the Pampas behind it. Those
+   * countries keep the land run, which is what this layer gave them before.
+   */
+  coastFound: boolean
+}
+
+/**
+ * The warmest sea the country's coastline touches: its latitude and its anomaly.
+ *
+ * Reads `__coast`, which is the country's true shoreline — the boundary arcs
+ * with no other country on the far side — rather than its outline. That
+ * distinction is what makes this scan safe, and it is the whole reason the
+ * shoreline is derived at load. A scan over the *outline* has to be restricted
+ * to points inside a `SEA_PATCHES` box, because the outline is mostly land
+ * border and would otherwise offer Algeria's Saharan frontier at 19°N as
+ * tropical water; and that restriction then does its own damage, because the
+ * boxes are drawn wider than their water and reach inland. Argentina touches no
+ * ocean the table names, but its Andean border with Chile falls inside the
+ * Humboldt upwelling box, so the warmest sea it could find was a 20 °C
+ * upwelling on the far side of the Andes and its coast came out 6 °C below the
+ * Pampas behind it.
+ *
+ * On a real coastline neither problem exists, so every shoreline point counts
+ * and a point in no box is simply the open ocean at its own latitude. The
+ * ranking is by resulting warm-season SST, because what this is for is finding
+ * the sea that drives the country's worst humid heat.
+ *
+ * The distance limit is for overseas territory carried in the same feature.
+ * Without it the warmest water the Netherlands touches is the Caribbean off
+ * Bonaire, and the Dutch coast came out at a wet bulb of 29.8 °C — a number for
+ * Kralendijk printed against Rotterdam. France reached the same way through
+ * Guadeloupe.
+ */
+const COASTAL_SEA_RANGE_KM = 2500
+
+function warmestCoastalSea(
+  feature: CountryFeature,
+  centroidLat: number,
+  centroidLng: number,
+  fallbackPatch: SeaPatch | null,
+): {
+  lat: number
+  anomalyC: number
+  enclosed: boolean
+  marineRh: number
+  found: boolean
+} {
+  const coast = feature.__coast
+  let best = {
+    lat: centroidLat,
+    anomalyC: fallbackPatch?.anomalyC ?? 0,
+    enclosed: fallbackPatch?.enclosed ?? false,
+    marineRh: fallbackPatch?.marineRh ?? MARINE_RH,
+    found: false,
+  }
+  if (!coast || coast.length < 2) return best
+  let bestSst = -Infinity
+  const rad = Math.PI / 180
+  const cosC = Math.cos(centroidLat * rad)
+  for (let i = 0; i < coast.length; i += 2) {
+    const lng = coast[i]
+    const lat = coast[i + 1]
+    const patch = seaPatchAt(lat, lng)
+    const sst = openOceanWarmSstC(lat) + (patch?.anomalyC ?? 0)
+    if (sst <= bestSst) continue
+    const dLat = (lat - centroidLat) * rad
+    const dLng = (lng - centroidLng) * rad
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat * rad) * cosC * Math.sin(dLng / 2) ** 2
+    if (2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h))) > COASTAL_SEA_RANGE_KM) continue
+    bestSst = sst
+    best = {
+      lat,
+      anomalyC: patch?.anomalyC ?? 0,
+      enclosed: patch?.enclosed ?? false,
+      marineRh: patch?.marineRh ?? MARINE_RH,
+      found: true,
+    }
+  }
+  return best
 }
 
 /**
@@ -603,21 +728,38 @@ function moistureGeo(feature: CountryFeature): MoistureGeo {
   const continental = continentality(feature)
   const hasCoast = (feature.__risk?.pctBelow5m ?? 0) > 0
   const patch = seaPatchAt(lat, lng)
+  // Enclosed basins have little water to buffer them and swing far harder
+  // through the year: the Persian Gulf runs from about 20 °C in February to
+  // 34 °C in August, which no stretch of open ocean at 26°N does.
+  const swing = (l: number, enclosed: boolean): number =>
+    (1.5 + 6.5 * Math.min(1, Math.abs(l) / 40)) * (enclosed ? 1.8 : 1)
+  const coast = hasCoast
+    ? warmestCoastalSea(feature, lat, lng, patch)
+    : {
+        lat,
+        anomalyC: patch?.anomalyC ?? 0,
+        enclosed: patch?.enclosed ?? false,
+        marineRh: patch?.marineRh ?? MARINE_RH,
+        found: false,
+      }
   return {
     lat,
     lng,
     continental,
+    hasCoast,
     // Raised to a power so the decay inland is faster than linear: marine air
     // is mixed out over a few hundred kilometres unless something keeps
     // pushing it, which is what the monsoon term is for.
     coastReach: hasCoast ? (1 - continental) ** 1.4 : 0,
     monsoonReach: monsoonPenetration(lat, lng),
     seaAnomalyC: patch?.anomalyC ?? 0,
-    // Enclosed basins have little water to buffer them and swing far harder
-    // through the year: the Persian Gulf runs from about 20 °C in February to
-    // 34 °C in August, which no stretch of open ocean at 26°N does.
-    seaSwingC:
-      (1.5 + 6.5 * Math.min(1, Math.abs(lat) / 40)) * (patch?.enclosed ? 1.8 : 1),
+    seaSwingC: swing(lat, patch?.enclosed ?? false),
+    coastLat: coast.lat,
+    coastAnomalyC: coast.anomalyC,
+    coastSwingC: swing(coast.lat, coast.enclosed),
+    seaMarineRh: patch?.marineRh ?? MARINE_RH,
+    coastMarineRh: coast.marineRh,
+    coastFound: coast.found,
   }
 }
 
@@ -630,6 +772,51 @@ function moistureGeo(feature: CountryFeature): MoistureGeo {
  * not only about where the centroid is — and for a landlocked country the two
  * runs are identical, since there is no sea to reach it either way.
  */
+/**
+ * The coastal strip's own temperature cycle, re-based off the centroid's.
+ *
+ * Without this the coastal run kept the centroid's temperature and merely swapped
+ * the sea, which assembles an air mass that does not exist: Algeria's Mediterranean
+ * shore was handed the Sahara's July at 28°N — a monthly mean daily maximum of
+ * 44 °C — and then given the Mediterranean's humidity on top, for a wet bulb of
+ * 32.9 °C. Algiers is 31 °C dry and about 25 °C wet.
+ *
+ * Two things are wrong with the centroid's temperature at a coast, and both are
+ * fixed by evaluating the same climatology somewhere else rather than by adding
+ * a correction: the coast is at its own latitude, and it is not continental. The
+ * second is what separates the two kinds of hot coast this layer has to get
+ * right at once. A Mediterranean shore is far cooler than the desert behind it,
+ * so dropping continentality cools it hard. A Persian Gulf shore is barely cooler
+ * than the desert behind it, because the water it is moderated *toward* is itself
+ * at 33 °C — and the sea terms downstream put that heat straight back.
+ */
+/**
+ * How much of a country's continentality its own coastal strip keeps.
+ *
+ * Not zero. Zero is a mid-ocean island, and the coast of a continent is not one:
+ * the wind blows off the land for a good part of the summer, and the seasonal
+ * cycle a shoreline actually runs is intermediate between the two.
+ *
+ * The value is a physical choice rather than a fitted one, and deliberately so.
+ * Swept against the 50 coastal stations in the reference table the error is flat
+ * from 0 to 0.45 — bias moves from −0.03 to +0.33 and the count within 2 °C is
+ * 40, 40, 40, 39, 38, 37 — and only degrades past 0.5. Anything in that range is
+ * equally defensible on the data, so the number is set where the physics puts it
+ * rather than at whichever third decimal the table happens to prefer.
+ */
+const COASTAL_CONTINENTALITY = 0.25
+
+interface CoastalClimate {
+  /** Annual mean at the centroid, which the trace's cycle is measured against. */
+  landMeanC: number
+  /** Annual mean on the coast. */
+  coastMeanC: number
+  /** How much the coast's seasonal swing is damped relative to the interior's. */
+  ampRatio: number
+  /** Daily range on the coast — maritime, so much narrower than the interior's. */
+  dtrC: number
+}
+
 function buildHeatYear(
   trace: MonthlyTrace,
   geo: MoistureGeo,
@@ -638,20 +825,38 @@ function buildHeatYear(
   hottestMonth: number,
   sstAnomalyC: number,
   fullCoast: boolean,
+  coastal: CoastalClimate | null,
   out: HeatYear,
 ): void {
-  const localCoast = fullCoast && geo.coastReach > 0 ? 1 : geo.coastReach
+  // A country's own shoreline is reached by marine air whatever its middle is
+  // like. Gating this on `coastReach` — a decay measured to the *centroid* —
+  // meant the eight largest coastal countries had no coastal strip at all,
+  // because their interiors are continental enough to drive that decay to zero:
+  // Saudi Arabia, whose Gulf shore holds the informal world record wet bulb,
+  // was modelled as if it were landlocked, and so were China, Brazil,
+  // Australia, Algeria, Libya, Sudan and the DRC.
+  const useCoastal = fullCoast && coastal !== null
+  const localCoast = fullCoast && geo.hasCoast ? 1 : geo.coastReach
   // The sea lags the sun by about a month, so its peak sits after the land's.
   const seaPeakPhase = (hottestMonth + 0.5) / 12 + 1 / 12
-  const zonalWarmSst = openOceanWarmSstC(geo.lat)
-  const warmSst = zonalWarmSst + geo.seaAnomalyC + sstAnomalyC
+  // The coastal run reads the sea beside the *coast*; the land run reads the
+  // one beside the centroid. For a small country they are the same water. For a
+  // large one they are not, and the centroid's is usually the colder — it is
+  // picked at a latitude chosen by the country's shape rather than by where its
+  // coastline is.
+  const seaLat = fullCoast ? geo.coastLat : geo.lat
+  const seaAnomaly = fullCoast ? geo.coastAnomalyC : geo.seaAnomalyC
+  const seaSwing = fullCoast ? geo.coastSwingC : geo.seaSwingC
+  const seaRh = fullCoast ? geo.coastMarineRh : geo.seaMarineRh
+  const zonalWarmSst = openOceanWarmSstC(seaLat)
+  const warmSst = zonalWarmSst + seaAnomaly + sstAnomalyC
   // The monsoon's moisture is picked up over the tropical ocean upstream, not
   // over whatever water happens to sit next to the country's centroid — the
   // Ganges plain is fed from the Bay of Bengal, and the Sahel from the Gulf of
   // Guinea, both well equatorward of the land they soak.
   const tropicalLat = geo.lat >= 0 ? Math.min(geo.lat, 12) : Math.max(geo.lat, -12)
   const warmTropicalSst =
-    openOceanWarmSstC(tropicalLat) + Math.max(0, geo.seaAnomalyC) + sstAnomalyC
+    openOceanWarmSstC(tropicalLat) + Math.max(0, seaAnomaly) + sstAnomalyC
 
   // The evaporative-cooling reference, weighted by the demand behind each
   // month's evaporative fraction rather than by the calendar. See
@@ -681,18 +886,27 @@ function buildHeatYear(
     const phase = (m + 0.5) / 12
     // 1 at the sea's warmest, 0 at its coldest.
     const season = (1 + Math.cos(2 * Math.PI * (phase - seaPeakPhase))) / 2
-    const localSstC = warmSst - geo.seaSwingC * (1 - season)
+    const localSstC = warmSst - seaSwing * (1 - season)
     const tropicalSstC = warmTropicalSst - 2.5 * (1 - season)
     // The ordinary ocean at this latitude — the background the westerlies
     // deliver to every continent whether or not it has a coast of its own.
     // No enclosed-basin multiplier here: this is open water by definition.
     const zonalSstC =
-      zonalWarmSst - openOceanSwingC(geo.lat) * (1 - season)
+      zonalWarmSst - openOceanSwingC(seaLat) * (1 - season)
 
     // A wet, cloudy month has a compressed daily range — the same reasoning and
     // the same coefficient the water-balance layer uses for its PET term.
     const share = Math.max(0.3, Math.min(1.8, rainShare[m] * 12))
-    const dtr = Math.max(3, dtrBaseC * (1 + 0.18 * (1 - share)))
+    const dtrBase = useCoastal ? coastal.dtrC : dtrBaseC
+    const dtr = Math.max(3, dtrBase * (1 + 0.18 * (1 - share)))
+    // The coast's own annual cycle: the interior's departure from its mean,
+    // damped by how much less a maritime strip swings, added to the coast's own
+    // mean. The shape of the year is kept — the monsoon's timing, the water
+    // balance's response — and only the two things the centroid gets wrong
+    // about a shoreline are replaced.
+    const monthTempC = useCoastal
+      ? coastal.coastMeanC + (trace.tempC[m] - coastal.landMeanC) * coastal.ampRatio
+      : trace.tempC[m]
 
     // Two corrections to the sinusoid, both of which move heat around the year
     // rather than adding any: the surface cools itself in the months it has
@@ -702,18 +916,18 @@ function buildHeatYear(
     // demand, which is what makes the twelve corrections sum to zero.
     const evapDemand = (pet ? pet[m] : 1) * demandScale
     const meanC =
-      trace.tempC[m] -
+      monthTempC -
       EVAPORATIVE_COOLING_C *
         evapDemand *
         (trace.evaporativeFraction[m] - efReference) +
-      SEA_TEMPERATURE_PULL * localCoast * geo.seaAnomalyC * season
+      SEA_TEMPERATURE_PULL * localCoast * seaAnomaly * season
     const dryMaxC = meanC + HALF_RANGE * dtr * DIURNAL_WET_FRACTION
 
     // What the land itself puts into the air: the water-balance layer's own
     // humidity, which responds to whether the surface can still meet demand.
     const landVapour = surfaceHumidity(trace.evaporativeFraction[m]) *
       saturationVapourKPa(meanC)
-    const localSeaVapour = MARINE_RH * saturationVapourKPa(localSstC)
+    const localSeaVapour = seaRh * saturationVapourKPa(localSstC)
     const tropicalSeaVapour = MARINE_RH * saturationVapourKPa(tropicalSstC)
     // A month is monsoonal in proportion to how far its rainfall runs above an
     // even twelfth of the year — which is exactly the seasonality the
@@ -794,7 +1008,11 @@ function buildHeatYear(
     out.dryC[m] = dryMaxC
     out.vapourKPa[m] = vapourKPa
     out.wetC[m] = wetBulbFromVapour(dryMaxC, vapourKPa)
-    out.spreadC[m] = wetBulbSpreadC(geo.lat, geo.continental, marineWeight)
+    out.spreadC[m] = wetBulbSpreadC(
+      useCoastal ? seaLat : geo.lat,
+      useCoastal ? geo.continental * COASTAL_CONTINENTALITY : geo.continental,
+      marineWeight,
+    )
     // "Marine-fed" is a claim about a specific and narrow case: a dry land
     // under a wet sea, where more than half the water in the air came off the
     // sea rather than out of the ground. A threshold of "any marine gain at
@@ -986,7 +1204,11 @@ export function habitabilityBlurb(band: HabitabilityBand): string {
 /* -------------------------------------------------------------------------- */
 
 export interface CountryHumidHeat {
-  /** Wet bulb reached on about one day a year, °C — today's climate and this pathway's. */
+  /**
+   * Wet bulb reached on about one day a year in the country's *worst* inhabited
+   * zone, °C — today's climate and this pathway's. See the note where it is set
+   * for why this is the worst zone rather than a population-weighted average.
+   */
   baselinePeakWetBulbC: number
   peakWetBulbC: number
   deltaPeakC: number
@@ -1014,22 +1236,21 @@ export interface CountryHumidHeat {
   daysAbove31: number
   daysAbove35: number
   /**
-   * The same peak evaluated for the low coastal strip, where marine air reaches
-   * fully — and the population-weighted blend of the two, which is the figure
-   * the exposure counts are banded on.
+   * The two zones behind `peakWetBulbC`, which is the worse of them: the
+   * country's interior at its centroid, and its coastal strip where marine air
+   * reaches fully.
    *
-   * The blend is a country-level number split two ways by one measured share,
-   * not a sub-national model. It moves the peak by more than 0.05 °C for 66
-   * countries, is worth saying out loud on 14 of them, and changes which
-   * habitability band a country lands in for three: Oman, Iraq and Egypt —
-   * centroids in the Rub al Khali, the Jazira and the Western Desert, people on
-   * the Gulf, the Shatt al-Arab and the Nile. Those are the same countries the
-   * layer misses hardest, and the gap is the whole story there: Iran 5.4 °C,
-   * Iraq 4.8, Egypt 4.5, Oman 2.9. Kept for them; skipped entirely for the 142
-   * countries where it cannot differ from the land run.
+   * Both are reported because the gap between them *is* the story for the
+   * countries this layer exists to find, and a single number hides it. Saudi
+   * Arabia is 27.1 inland and 33.2 on the Gulf; Iran 28.1 and 32.8; Iraq 27.9
+   * and 32.4; the United States 27.0 in Kansas and 29.3 on the Gulf of Mexico.
+   * Anything user-facing that quotes the headline should be able to say which of
+   * the two it came from, which is what `worstIsCoast` is for.
    */
+  landPeakWetBulbC: number
   coastalPeakWetBulbC: number
-  peoplePeakWetBulbC: number
+  /** True where the coastal strip, not the interior, set `peakWetBulbC`. */
+  worstIsCoast: boolean
   band: HabitabilityBand
   /** Band the country's own centroid climate falls in, before the coastal weighting. */
   landBand: HabitabilityBand
@@ -1063,6 +1284,7 @@ const FUTURE_TRACE: MonthlyTrace = {
 const BASE_YEAR = makeHeatYear()
 const FUTURE_YEAR = makeHeatYear()
 const FUTURE_COAST_YEAR = makeHeatYear()
+const BASE_COAST_YEAR = makeHeatYear()
 
 // Same reasoning as the drought layer's `geoCache`: none of this changes with
 // the pathway, and `geoCentroid` over a 50m outline is far too costly to redo
@@ -1157,6 +1379,7 @@ export function humidHeatFromClimate(
     solarPeakMonth,
     0,
     false,
+    null,
     BASE_YEAR,
   )
   buildHeatYear(
@@ -1167,16 +1390,27 @@ export function humidHeatFromClimate(
     solarPeakMonth,
     sstAnomalyC,
     false,
+    null,
     FUTURE_YEAR,
   )
-  // The coastal variant: the same climate with the local sea reaching it in
-  // full. For Iran, Iraq, Egypt or Oman that is a different country entirely —
-  // 4 to 5 °C of wet bulb between the centroid and the shore. For a country
-  // with no coast, or one already fully reached by its own sea, the run is
-  // arithmetically identical to the land run, and skipping it there is free:
-  // 142 of 241 countries never needed it, and it was the most expensive single
-  // thing this layer did.
-  const coastalDiffers = geo.coastReach > 0 && geo.coastReach < 1
+  // The coastal variant: the country's shoreline rather than its middle — its
+  // own latitude, its own maritime temperature cycle, and the local sea
+  // reaching it in full. For Iran, Iraq, Saudi Arabia or Egypt that is a
+  // different country entirely, 5 to 8 °C of wet bulb between the centroid and
+  // the shore. Skipped for a landlocked country, where there is no shoreline to
+  // run and the two would be identical.
+  const coastalCont = geo.continental * COASTAL_CONTINENTALITY
+  const coastalClimate: CoastalClimate = {
+    landMeanC: futureMeanC,
+    coastMeanC: annualMeanTempC(geo.coastLat, coastalCont) + temp.deltaSince2020C,
+    ampRatio:
+      seasonalAmplitudeC(geo.lat, geo.continental) > 0
+        ? seasonalAmplitudeC(geo.coastLat, coastalCont) /
+          seasonalAmplitudeC(geo.lat, geo.continental)
+        : 1,
+    dtrC: dailyTempRangeC(rain.futureMm, coastalCont),
+  }
+  const coastalDiffers = geo.hasCoast && geo.coastFound
   if (coastalDiffers) {
     buildHeatYear(
       FUTURE_TRACE,
@@ -1186,26 +1420,69 @@ export function humidHeatFromClimate(
       solarPeakMonth,
       sstAnomalyC,
       true,
+      coastalClimate,
       FUTURE_COAST_YEAR,
     )
+    // The baseline needs the same second zone, or the change over time is
+    // measured between two different places: a country whose coast is the worse
+    // zone would have its shoreline's future compared against its interior's
+    // present, and every degree of the gap between them would be reported as
+    // warming that had not happened.
+    buildHeatYear(
+      BASE_TRACE,
+      geo,
+      baseDtr,
+      climate.rainShare,
+      solarPeakMonth,
+      0,
+      true,
+      { ...coastalClimate, landMeanC: baseMeanC, coastMeanC: coastalClimate.coastMeanC - temp.deltaSince2020C, dtrC: dailyTempRangeC(rain.baselineMm, coastalCont) },
+      BASE_COAST_YEAR,
+    )
   }
+
+  const landPeakWetBulbC = onceAYearWetBulbC(FUTURE_YEAR)
+  const coastalPeakWetBulbC = coastalDiffers
+    ? onceAYearWetBulbC(FUTURE_COAST_YEAR)
+    : landPeakWetBulbC
+  // The country is scored on its worst inhabited zone, not on an average of its
+  // zones. Two reasons, and the first is what this layer is for: the bands below
+  // are survivability claims — "dangerous even at rest", "past survivable
+  // without cooling" — and those are properties of a place, not of a mean. An
+  // average over a country is a statement about nowhere. The second is that the
+  // extremes this layer exists to find are, without exception, small and
+  // coastal: the 14 recorded days at or above 35 °C wet bulb happened at
+  // Jacobabad, Ras al Khaimah, Jeddah, Dhahran and Dera Ismail Khan, and an
+  // average of Saudi Arabia puts Dhahran's 35 °C together with the Nejd and
+  // reports 27.
+  //
+  // What this gives up is worth stating. The previous figure was weighted by the
+  // share of each country's population below 5 m, and it is a fair question
+  // whether the shoreline should carry the whole country's headline. It should
+  // not carry it silently, which is why `landPeakWetBulbC` is reported beside it
+  // and the panel names the two apart. But that population weight could not do
+  // the job asked of it either: it is a sea-level-rise flood contour, and as a
+  // measure of who breathes marine air it is low by something like five to ten
+  // times — Saudi Arabia 3.2%, Iran 0.9% — so it did not average the coast in,
+  // it averaged the coast away.
+  const worstIsCoast = coastalPeakWetBulbC > landPeakWetBulbC
+  const worstYear = worstIsCoast ? FUTURE_COAST_YEAR : FUTURE_YEAR
+  const baselineWorstYear = worstIsCoast ? BASE_COAST_YEAR : BASE_YEAR
+  const peakWetBulbC = worstIsCoast ? coastalPeakWetBulbC : landPeakWetBulbC
+  const baselinePeakWetBulbC = onceAYearWetBulbC(baselineWorstYear)
 
   // Read the hottest month off the corrected dry bulb, not off the sinusoid:
   // the whole point of the comparison the panel draws is that in a monsoon
   // climate the most dangerous month and the hottest month are not the same
-  // one, and comparing against the solar peak would hide exactly that.
+  // one, and comparing against the solar peak would hide exactly that. Both are
+  // read off the zone that set the peak, so the month, the dry bulb, the
+  // humidity and the day-counts all describe the same place.
   let peakMonth = 0
   let hottestMonth = 0
   for (let m = 1; m < 12; m++) {
-    if (FUTURE_YEAR.wetC[m] > FUTURE_YEAR.wetC[peakMonth]) peakMonth = m
-    if (FUTURE_YEAR.dryC[m] > FUTURE_YEAR.dryC[hottestMonth]) hottestMonth = m
+    if (worstYear.wetC[m] > worstYear.wetC[peakMonth]) peakMonth = m
+    if (worstYear.dryC[m] > worstYear.dryC[hottestMonth]) hottestMonth = m
   }
-
-  const baselinePeakWetBulbC = onceAYearWetBulbC(BASE_YEAR)
-  const peakWetBulbC = onceAYearWetBulbC(FUTURE_YEAR)
-  const coastalPeakWetBulbC = coastalDiffers
-    ? onceAYearWetBulbC(FUTURE_COAST_YEAR)
-    : peakWetBulbC
 
   const risk = feature.__risk
   const iso3 = risk?.iso3 ?? null
@@ -1217,12 +1494,6 @@ export function humidHeatFromClimate(
     0,
     Math.min(1, (risk?.popPctBelow5m ?? 0) / 100),
   )
-  // The country average is a fiction for anyone in particular; the split
-  // between the coastal lowland and the rest is at least the right kind of
-  // fiction, because that measured population share is the one piece of
-  // sub-national information this app has.
-  const peoplePeakWetBulbC =
-    peakWetBulbC + coastalPopShare * (coastalPeakWetBulbC - peakWetBulbC)
 
   // The dry bulb on the day the wet bulb peaks — not the month's mean daily
   // maximum, which is a different day and can be *below* the yearly extreme
@@ -1231,7 +1502,7 @@ export function humidHeatFromClimate(
   // in the rest of the layer. Solved at the month's own relative humidity: an
   // extreme day is both hotter and wetter than the month's average one, so
   // holding the ratio and raising both is the honest reading of it.
-  const peakHumidity = monthHumidity(FUTURE_YEAR, peakMonth)
+  const peakHumidity = monthHumidity(worstYear, peakMonth)
   const peakDryBulbC = dryBulbForWetBulb(peakWetBulbC, peakHumidity)
 
   return {
@@ -1243,17 +1514,18 @@ export function humidHeatFromClimate(
     peakMonth,
     hottestMonth,
     humidPeakOffHottest: peakMonth !== hottestMonth,
-    marineFed: FUTURE_YEAR.marineFed[peakMonth] === 1,
-    baselineDaysAbove28: daysAbove(BASE_YEAR, 28),
-    baselineDaysAbove31: daysAbove(BASE_YEAR, 31),
-    baselineDaysAbove35: daysAbove(BASE_YEAR, 35),
-    daysAbove28: daysAbove(FUTURE_YEAR, 28),
-    daysAbove31: daysAbove(FUTURE_YEAR, 31),
-    daysAbove35: daysAbove(FUTURE_YEAR, 35),
+    marineFed: worstYear.marineFed[peakMonth] === 1,
+    baselineDaysAbove28: daysAbove(baselineWorstYear, 28),
+    baselineDaysAbove31: daysAbove(baselineWorstYear, 31),
+    baselineDaysAbove35: daysAbove(baselineWorstYear, 35),
+    daysAbove28: daysAbove(worstYear, 28),
+    daysAbove31: daysAbove(worstYear, 31),
+    daysAbove35: daysAbove(worstYear, 35),
+    landPeakWetBulbC,
     coastalPeakWetBulbC,
-    peoplePeakWetBulbC,
-    band: habitabilityBand(peoplePeakWetBulbC),
-    landBand: habitabilityBand(peakWetBulbC),
+    worstIsCoast,
+    band: habitabilityBand(peakWetBulbC),
+    landBand: habitabilityBand(landPeakWetBulbC),
     populationM,
     coastalPopShare,
   }

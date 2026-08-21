@@ -536,16 +536,18 @@ export function StatsPanel({
                   ? ' More than half that moisture blows in off the sea rather than rising out of the ground, so the humidity here holds up through a dry summer that the land itself could not supply.'
                   : ''
               }${
-                // Only worth saying where the coast is actually a different
-                // climate from the country's middle. For a Bahrain or a
-                // Singapore the centroid *is* the coast, and the sentence
-                // otherwise reads "33.8°C rather than the country-wide 33.8°C".
-                selectedHumidHeat.coastalPopShare > 0.05 &&
-                Math.abs(
-                  selectedHumidHeat.coastalPeakWetBulbC -
-                    selectedHumidHeat.peakWetBulbC,
-                ) >= 0.2
-                  ? ` About ${Math.round(selectedHumidHeat.coastalPopShare * 100)}% of the population lives in the low coastal strip, where the yearly peak is ${formatWetBulbC(selectedHumidHeat.coastalPeakWetBulbC)} rather than the country-wide ${formatWetBulbC(selectedHumidHeat.peakWetBulbC)}.`
+                // The headline is the country's worst inhabited zone, so where
+                // that zone is the shoreline the reader has to be told, or the
+                // number reads as a claim about the whole country. No population
+                // gate here any more: the old one hid this sentence behind the
+                // share of people below 5 m, which is a flood contour, and it
+                // therefore stayed hidden for exactly the countries whose coast
+                // is the story — Saudi Arabia at 3.2%, Iran at 0.9%.
+                selectedHumidHeat.worstIsCoast &&
+                selectedHumidHeat.peakWetBulbC -
+                  selectedHumidHeat.landPeakWetBulbC >=
+                  0.2
+                  ? ` That peak is on the coast; inland the yearly peak is ${formatWetBulbC(selectedHumidHeat.landPeakWetBulbC)}. The country is scored on the worse of the two, because these bands describe places rather than averages.`
                   : ''
               }`}
             {selectedFire && selectedFire.observedBurnedKm2 != null &&
