@@ -359,9 +359,22 @@ export function StatsPanel({
             </div>
             <div>
               <dt>Local warming</dt>
+              {/*
+                Both references are named. The headline is measured from
+                pre-industrial, the same baseline the global figure at the top of
+                the panel uses, and the second number from the 2020s. Only the
+                second used to be labelled, which made the pair read as though a
+                country warmed *less* than the world: beside a global +2.7°C the
+                United Kingdom showed "+3.4°C / +2.0°C since 2020s", and the eye
+                lands on the labelled number. It warms more than the world, not
+                less — 3.4 against 2.7.
+              */}
               <dd className={selectedTemp.absoluteC < 0 ? 'cold' : undefined}>
                 {formatAbsoluteC(selectedTemp.absoluteC)}°C
-                <span>{formatDeltaC(selectedTemp.deltaSince2020C)} since 2020s</span>
+                <span>
+                  vs pre-industrial ·{' '}
+                  {formatDeltaC(selectedTemp.deltaSince2020C)} since 2020s
+                </span>
               </dd>
             </div>
             <div>

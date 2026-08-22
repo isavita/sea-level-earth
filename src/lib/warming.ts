@@ -91,10 +91,26 @@ function greatCircleKm(
  * The subpolar North Atlantic is the one place projected to warm markedly less
  * than its latitude implies — a slowing overturning circulation stops importing
  * as much heat. Centred on the subpolar gyre south of Greenland.
+ *
+ * The reach is 1,900 km rather than the 1,400 it was first given, because the
+ * hole in CMIP6 is a broad feature spanning roughly 45–65°N and not a spot. At
+ * the narrower radius it barely touched the places it exists to describe, and
+ * the zonal table's Arctic amplification — which is a sea-ice and snow-albedo
+ * signal — reached them instead. Iceland came out as the eighth fastest-warming
+ * country on Earth at 1.52× the global mean, when it is an island in open water
+ * in the middle of the hole and warms at roughly the global rate. That is the
+ * same error, one step down, as the `|latitude|` model this file replaced, which
+ * gave Antarctica the Arctic's amplification.
+ *
+ * Checked against the AR6 Atlas warming ratios for 54 countries, widening the
+ * reach moves 37 into range to 39 and cuts the worst overestimate from +0.32 to
+ * +0.22, without pushing anything below its range. The depth is unchanged at
+ * 0.3: deepening it as well over-corrected, dragging Greenland, France and
+ * Ireland under their assessed ranges.
  */
 function warmingHoleFactor(lat: number, lng: number): number {
   const d = greatCircleKm(lat, lng, 55, -30)
-  return 1 - 0.3 * Math.exp(-((d / 1400) ** 2))
+  return 1 - 0.3 * Math.exp(-((d / 1900) ** 2))
 }
 
 interface GeoShape {

@@ -129,6 +129,28 @@ interface MapLabel {
 /** True when the fill is dark enough to need light text. */
 const isLightText = (weight: number) => weight >= 2.8
 
+/**
+ * Shorter forms for the only names long enough to crowd their neighbours.
+ *
+ * Natural Earth already abbreviates most of the awkward ones — "Dem. Rep.
+ * Congo", "Central African Rep.", "Bosnia and Herz." — so this covers the eight
+ * that still run past thirteen characters inside the label budget. Every label
+ * is extruded 3D text, so a long name is not only wide on the globe but costs
+ * geometry per glyph.
+ */
+const SHORT_NAME: Record<string, string> = {
+  'United States of America': 'USA',
+  'United Kingdom': 'UK',
+  'United Arab Emirates': 'UAE',
+  'Central African Rep.': 'C.A.R.',
+  'Dem. Rep. Congo': 'DR Congo',
+  'Papua New Guinea': 'Papua N.G.',
+  'Bosnia and Herz.': 'Bosnia',
+  'Dominican Rep.': 'Dom. Rep.',
+}
+
+const shortName = (name: string) => SHORT_NAME[name] ?? name
+
 function sameLabel(a: MapLabel, b: MapLabel): boolean {
   return (
     a.text === b.text &&
@@ -631,6 +653,26 @@ export function EarthGlobe({
    * rebuild is a one-off, full precision comes back.
    */
   const coarse = playing
+  /** Country names ride along on the labels, except while the timeline plays. */
+  const showNames = !playing
+  /**
+   * How many of them get a name. Fewer than the label budget, because the two
+   * caps answer different questions: the budget is how many countries can show a
+   * value, and this is how many are wide enough to carry a name beside it.
+   *
+   * The cost is glyph count. three-globe rebuilds every label's extruded text on
+   * each digest, and a name roughly triples the string, so dragging the year
+   * slider on a desktop globe measured a median commit of 90 ms with no names,
+   * 143 ms at 60, 159 ms at 80 and 187 ms at all 150. 60 is where the curve stops
+   * buying anything: barely half the world faces the camera at once, so the names
+   * past it were on countries either hidden or too small to read them.
+   *
+   * The order is by area, so the names land on the countries a reader is actually
+   * trying to identify, and the selected or hovered one is always named however
+   * small it is. Nothing loses its value — the rest show the number alone, as
+   * they did before.
+   */
+  const nameBudget = isMobile ? 42 : 60
 
   const mapLabels = useMemo((): MapLabel[] => {
     const labels: MapLabel[] = []
@@ -752,6 +794,26 @@ export function EarthGlobe({
       if (f) pushLabel(f)
     }
 
+    /*
+      Name the countries. Mutating here is safe and deliberate: `labels` holds
+      objects built fresh this pass, and the reconciliation below compares them
+      against the cache *after* this runs, so a cached object is never modified
+      behind the comparison's back.
+
+      Not while the timeline plays. Every label is extruded 3D text rebuilt on
+      each digest, so cost scales with glyph count, and a name roughly triples
+      the string — on the one path where labels are already thinned to 24 and
+      coarsened to whole degrees precisely because that cost bites. A name
+      flickering past at ten years a second is unreadable anyway.
+    */
+    if (showNames) {
+      labels.forEach((l, i) => {
+        if (i < nameBudget || l.id === selectedId || l.id === hoverId) {
+          l.text = `${shortName(l.name)} ${l.text}`
+        }
+      })
+    }
+
     // Reuse the previous object wherever nothing visible changed…
     const cache = labelCacheRef.current
     const seen = new Set<string>()
@@ -791,6 +853,8 @@ export function EarthGlobe({
     hoverId,
     labelBudget,
     coarse,
+    showNames,
+    nameBudget,
   ])
 
   /* Label accessors, memoised on what they actually read. Inline arrows get a

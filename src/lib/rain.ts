@@ -27,8 +27,56 @@ export interface CountryRain {
   fromObservations: boolean
 }
 
+/**
+ * Measured annual precipitation for places the World Bank series does not cover,
+ * mm/yr — a hand-entered observational table, the same kind of prescribed input
+ * as `SEA_PATCHES` in `humidHeat.ts` and `OBSERVED_BURNED_AREA_KM2` in `fire.ts`.
+ *
+ * It exists because the latitude fallback below is a *zonal land* climatology,
+ * and the places that fall through to it are mostly the two cases that
+ * climatology describes worst: maritime islands, which it treats as continental
+ * interiors, and desert coasts at tropical latitudes, which it treats as wet
+ * tropics. Both errors were large enough to be visible downstream, because the
+ * water balance, the fire model and the humid-heat layer all read this number:
+ *
+ *   - Somaliland was handed 2,200 mm — the wet-tropics value for anything inside
+ *     10° of the equator — against an observed 250. Modelled as a rainforest, it
+ *     grew 10,300 km²/yr of burned area out of the Horn of Africa.
+ *   - Western Sahara was handed 450 mm against an observed 45, and burned
+ *     13,100 km²/yr of hyper-arid desert.
+ *   - Taiwan, Hong Kong and Macao all sit in the 20–35° band the fallback treats
+ *     as subtropical desert at 450 mm. They receive 2,450 to 2,500.
+ *
+ * Only the entries that carry real area or real prominence are listed. Between
+ * them they cover 99.6% of the land that was falling through; what is left is
+ * small islands under 12,000 km², which keep the fallback and are noted in the
+ * layer's limits rather than filled in with numbers that would be guesses.
+ */
+const OBSERVED_PRECIP_MM: Record<string, number> = {
+  // Verified against national meteorological services this pass.
+  Somaliland: 250, // Hargeisa ~250; the northern coast 50–150
+  'W. Sahara': 45, // hyper-arid; most of the territory under 50
+  Taiwan: 2500, // Water Resources Agency national mean 2,502
+  'Hong Kong': 2450, // Hong Kong Observatory 1995–2014, 2,456
+  Macao: 1900, // 1,818–2,058 depending on period
+  'New Caledonia': 1020, // territory mean; Nouméa ~1,070, the east coast far wetter
+  Montenegro: 1700, // one of the wettest countries in Europe
+  'Faeroe Is.': 1400,
+  Tonga: 1900, // Tongatapu 1,600, Vava'u 2,210
+  'Cook Is.': 2000,
+  Aruba: 550, // the ABC islands are arid, not the wet Caribbean
+  'Curaçao': 550,
+  'Saint Helena': 500, // Jamestown 154, the interior highlands far wetter
+  // Large area, standard figures, and both already flagged as frozen ground —
+  // listed so the global totals are not carried by a latitude guess.
+  Greenland: 340,
+  Antarctica: 170,
+}
+
 /** Rough global-mean annual precip by absolute latitude when WB data is missing. */
 export function precipFallbackMm(feature: CountryFeature): number {
+  const measured = OBSERVED_PRECIP_MM[feature.properties.name]
+  if (measured != null) return measured
   const absLat = Math.abs(countryCentroid(feature).lat)
   // Crude climatology: wet tropics, dry subtropics, moderate mid-lats, drier polar
   if (absLat < 10) return 2200
