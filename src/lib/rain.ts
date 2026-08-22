@@ -141,6 +141,21 @@ function regionalSensAdjust(lat: number, lng: number): number {
   // Sri Lanka to +34%).
   if (lat > 12 && lat < 35 && lng > 65 && lng < 95) return 0.07 // South Asia
   if (lat > 20 && lat < 45 && lng > 100 && lng < 145) return 0.045 // East Asia
+  // Mainland South-East Asia, which the two boxes above leave in a gap: the
+  // South Asian one stops at 95°E and the East Asian one starts at 100°E and
+  // 20°N, so Myanmar fell through the hole between them and Thailand, Laos,
+  // Cambodia and Vietnam sat under no correction at all. All five then took the
+  // raw subtropical drying, and Myanmar — a monsoon country AR6 puts between 0
+  // and +20% — came out at −9.9%. The maritime islands are deliberately left
+  // out below 8°N: they already read wet off the equatorial zonal profile, and
+  // adding this on top would double-count them the way Sri Lanka was.
+  if (lat > 8 && lat < 25 && lng > 92 && lng < 110) return 0.035
+  // South-eastern South America. One of the most robust wetting signals in AR6
+  // and the model had no box for it, so Argentina, Uruguay and Paraguay were
+  // taking subtropical drying — Argentina at −7.6% against an assessed 0 to
+  // +18%. Held east of 66°W so it cannot reach across the Andes into the
+  // central-Chile drying box, which is the opposite signal at the same latitude.
+  if (lat > -40 && lat < -17 && lng > -66 && lng < -40) return 0.045
   // Mediterranean — one of the clearest drying signals anywhere
   if (lat > 30 && lat < 46 && lng > -10 && lng < 42) return -0.045
   // Southwest North America
@@ -179,8 +194,15 @@ export function estimateCountryRain(
 
   const extraWarming = Math.max(0, globalWarmingC - baselineGlobalC)
   const sens = precipSensitivityPerC(feature)
-  // Soften extreme relative swings for very dry countries
-  const damp = baselineMm < 200 ? 0.6 : baselineMm < 400 ? 0.8 : 1
+  // Soften extreme relative swings for very dry countries, on a ramp rather
+  // than in bands — for exactly the reason `ZONAL_SENS` is interpolated rather
+  // than banded. The old steps at 200 and 400 mm meant a country's sensitivity
+  // jumped by a third across a few millimetres of rainfall: Turkmenistan at
+  // 161 mm was damped to 0.6 and Uzbekistan at 206 mm to 0.8, and Eritrea at
+  // 384 mm to 0.8 against Palestine at 402 mm to 1.0. The ramp passes through
+  // the old values at the middle of each band, so nothing moves far; it just
+  // stops neighbours differing for no physical reason.
+  const damp = 0.6 + 0.4 * Math.max(0, Math.min(1, (baselineMm - 150) / 300))
   // A stalling Atlantic circulation drags the tropical rain belt south, which
   // is a shift in *where* the rain falls rather than a response to warming — so
   // it is added on top rather than scaled by the temperature change.

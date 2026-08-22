@@ -129,12 +129,70 @@ interface GeoShape {
 // for ~240 countries on every timeline commit.
 const shapeCache = new WeakMap<CountryFeature, GeoShape>()
 
+/**
+ * How far from a country's main landmass a piece of it can sit and still count
+ * toward where that country *is*.
+ *
+ * Far enough to keep every real archipelago whole — from Borneo, the far ends of
+ * Indonesia are about 1,800 km; Luzon to Mindanao is 1,000; mainland Norway to
+ * Svalbard is 1,200 — and short enough to drop territory on the other side of an
+ * ocean. That distinction matters because `geoCentroid` weights by area, so a
+ * distant possession does not just nudge the result, it drags it off the
+ * country: France came out at 43.0°N, 6.7°W, a point in the Bay of Biscay off
+ * northern Spain, 825 km from anywhere in France, because Guiana, the Antilles,
+ * Réunion and Mayotte pull the spherical mean south and west. Every layer in the
+ * app reads this centroid, so France was being given the temperature, rainfall,
+ * water balance, fire weather and humid heat of open ocean at Spain's latitude —
+ * and it landed inside the Mediterranean drying box, which mainland France at
+ * 46.6°N sits north of.
+ *
+ * The United States moves the same way, from South Dakota to Kansas, once Alaska
+ * and Hawaii stop pulling on it.
+ */
+const MAIN_BODY_RANGE_KM = 3000
+
+/**
+ * The country minus any far-flung territory — or the country unchanged, which is
+ * the answer for all but a handful.
+ */
+function mainBody(feature: CountryFeature): CountryFeature {
+  const g = feature.geometry
+  if (g.type !== 'MultiPolygon' || g.coordinates.length < 2) return feature
+  // Largest part first: it is what "the country" means for this purpose.
+  let main: number[][][] | null = null
+  let mainArea = 0
+  for (const poly of g.coordinates) {
+    const area = geoArea({ type: 'Polygon', coordinates: poly })
+    if (area > mainArea) {
+      mainArea = area
+      main = poly
+    }
+  }
+  if (!main) return feature
+  const [mLng, mLat] = geoCentroid({ type: 'Polygon', coordinates: main })
+  if (!Number.isFinite(mLat)) return feature
+  const kept = g.coordinates.filter((poly) => {
+    const [pLng, pLat] = geoCentroid({ type: 'Polygon', coordinates: poly })
+    if (!Number.isFinite(pLat)) return false
+    return greatCircleKm(mLat, mLng, pLat, pLng) <= MAIN_BODY_RANGE_KM
+  })
+  if (kept.length === g.coordinates.length || kept.length === 0) return feature
+  return {
+    ...feature,
+    geometry: { type: 'MultiPolygon', coordinates: kept },
+  } as CountryFeature
+}
+
 function geoShape(feature: CountryFeature): GeoShape {
   const cached = shapeCache.get(feature)
   if (cached) return cached
-  const [lng, lat] = geoCentroid(feature)
+  const body = mainBody(feature)
+  const [lng, lat] = geoCentroid(body)
+  // Area stays the country's own measured figure — the outlying parts are still
+  // its territory, they just do not say where its climate is. Only the shape
+  // terms are read off the main body.
   const areaKm2 = feature.__areaKm2 ?? geoArea(feature) * SR_TO_KM2
-  const perimeterKm = geoLength(feature) * EARTH_R_KM
+  const perimeterKm = geoLength(body) * EARTH_R_KM
   const shape: GeoShape = {
     lat: Number.isFinite(lat) ? lat : 0,
     lng: Number.isFinite(lng) ? lng : 0,
